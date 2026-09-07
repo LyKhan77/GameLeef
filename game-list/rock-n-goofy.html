@@ -1,0 +1,4216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rock &amp; Goofy!!!</title>
+<style>
+  :root{
+    --navy:#0d1321;
+    --crimson:#ba1200;
+    --bone:#f2f4f3;
+    --steel:#467599;
+    --amber:#e5a93b;
+    --cyan:#00d2ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--navy);color:var(--bone)}
+  body{
+    font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    user-select:none;
+  }
+  canvas{display:block;position:fixed;inset:0}
+
+  .metal{
+    font-family:Impact,Haettenschweiler,"Arial Narrow Bold","Arial Black",sans-serif;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+    transform:skewX(-8deg);
+    line-height:.95;
+  }
+
+  #ui-layer{position:fixed;inset:0;pointer-events:none;z-index:10}
+  .screen{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:flex-start;gap:clamp(8px,1.6vh,16px);
+    padding-top:clamp(8px,3vh,26px);
+    background:radial-gradient(ellipse at 50% 40%,rgba(186,18,0,.18),rgba(13,19,33,.94) 62%,rgba(13,19,33,.99));
+    pointer-events:auto;padding:24px;overflow-y:auto;
+  }
+  .hidden{display:none !important}
+
+  /* ---------- title ---------- */
+  #title{
+    font-size:clamp(30px,6.4vw,84px);
+    color:var(--bone);
+    text-shadow:
+      4px 0 0 var(--crimson),
+      -3px 0 0 var(--steel),
+      0 0 26px rgba(186,18,0,.85),
+      0 8px 0 #06090f,
+      0 14px 34px #000;
+    filter:drop-shadow(0 0 10px rgba(186,18,0,.5));
+  }
+  #title span{color:var(--crimson);text-shadow:0 0 24px var(--crimson),0 6px 0 #06090f}
+  #subtitle{
+    font-size:clamp(11px,1.5vw,16px);letter-spacing:.42em;color:var(--steel);
+    text-transform:uppercase;margin-top:-4px;
+  }
+  .rule{
+    width:min(760px,86vw);height:3px;
+    background:linear-gradient(90deg,transparent,var(--crimson) 18%,var(--bone) 50%,var(--crimson) 82%,transparent);
+    opacity:.85;
+  }
+
+  /* ---------- panels ---------- */
+  .panel{
+    width:min(760px,90vw);
+    border:2px solid rgba(70,117,153,.5);
+    background:linear-gradient(180deg,rgba(13,19,33,.92),rgba(6,10,17,.92));
+    box-shadow:inset 0 0 42px rgba(70,117,153,.12),0 10px 40px rgba(0,0,0,.7);
+    padding:clamp(10px,1.6vh,16px) 20px;
+  }
+  .panel h2{
+    font-family:Impact,Haettenschweiler,"Arial Narrow Bold",sans-serif;
+    transform:skewX(-8deg);text-transform:uppercase;font-size:19px;
+    color:var(--crimson);letter-spacing:.08em;margin-bottom:8px;
+  }
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center}
+  .label{font-size:11px;letter-spacing:.26em;color:var(--steel);text-transform:uppercase}
+
+  button,.btn{
+    font-family:Impact,Haettenschweiler,"Arial Narrow Bold",sans-serif;
+    text-transform:uppercase;letter-spacing:.06em;transform:skewX(-8deg);
+    font-size:clamp(15px,1.8vh,19px);padding:clamp(7px,1.2vh,11px) 20px;cursor:pointer;
+    color:var(--bone);background:linear-gradient(180deg,#1b2740,#0a0f1a);
+    border:2px solid var(--steel);border-radius:0;
+    transition:background .12s,border-color .12s,color .12s,box-shadow .12s;
+  }
+  button:hover,.btn:hover{border-color:var(--crimson);box-shadow:0 0 22px rgba(186,18,0,.55);color:#fff}
+  button.primary{background:linear-gradient(180deg,#d81600,#7d0c00);border-color:var(--bone)}
+  button.primary:hover{box-shadow:0 0 34px rgba(186,18,0,.95)}
+  button.sel{background:linear-gradient(180deg,#d81600,#7d0c00);border-color:var(--bone);color:#fff}
+  button:disabled{opacity:.4;cursor:not-allowed}
+
+  #drop{
+    width:100%;padding:clamp(10px,2vh,20px) 14px;margin-top:4px;text-align:center;
+    border:2px dashed rgba(70,117,153,.65);
+    color:var(--steel);font-size:13px;letter-spacing:.18em;text-transform:uppercase;
+    cursor:pointer;transition:.15s;
+  }
+  #drop:hover,#drop.over{border-color:var(--crimson);color:var(--bone);background:rgba(186,18,0,.12)}
+  #filename{color:var(--amber);font-size:12px;letter-spacing:.1em;margin-top:8px;min-height:14px}
+
+  input[type=range]{width:220px;accent-color:#ba1200;background:transparent}
+  .hint{font-size:11px;color:#6c8093;letter-spacing:.1em;line-height:1.7;text-align:center}
+  kbd{
+    display:inline-block;min-width:24px;padding:2px 6px;margin:0 2px;
+    border:1px solid var(--steel);color:var(--bone);font-family:inherit;font-size:11px;
+    background:rgba(70,117,153,.18);
+  }
+
+  /* ---------- loading ---------- */
+  #barOuter{width:min(520px,80vw);height:16px;border:2px solid var(--steel);background:#06090f}
+  #barFill{height:100%;width:0%;background:linear-gradient(90deg,var(--crimson),var(--amber));box-shadow:0 0 20px var(--crimson)}
+  #loadTxt{font-size:13px;letter-spacing:.28em;color:var(--steel);text-transform:uppercase}
+
+  /* ---------- HUD ---------- */
+  #hud{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .3s}
+  #hud.on{opacity:1}
+
+  #hudTop{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:16px 22px}
+  #scoreBox{text-align:left}
+  #score{
+    font-size:clamp(30px,4.6vw,58px);color:var(--bone);
+    text-shadow:3px 0 0 var(--crimson),0 0 22px rgba(242,244,243,.35),0 5px 0 #06090f;
+  }
+  #hudTitle{
+    text-align:center;font-size:clamp(18px,2.6vw,34px);color:var(--bone);
+    text-shadow:3px 0 0 var(--crimson),0 0 20px rgba(186,18,0,.7),0 5px 0 #06090f;opacity:.92;
+  }
+  #hudTitle small{display:block;font-size:9px;letter-spacing:.4em;color:var(--steel);transform:skewX(8deg);margin-top:4px}
+  #statBox{text-align:right}
+  #acc{font-size:20px;color:var(--steel)}
+  #notesLeft{font-size:11px;letter-spacing:.2em;color:#5d7182}
+
+  #comboBox{position:absolute;left:22px;top:44%;text-align:left}
+  #mult{
+    font-size:clamp(34px,5.6vw,70px);color:var(--crimson);
+    text-shadow:0 0 26px var(--crimson),0 6px 0 #06090f,2px 0 0 var(--bone);
+  }
+  #combo{font-size:clamp(15px,2vw,24px);color:var(--bone);opacity:.85}
+  #comboLbl{font-size:10px;letter-spacing:.34em;color:var(--steel)}
+
+  #meterWrap{position:absolute;right:26px;top:26%;height:46%;width:44px;display:flex;flex-direction:column;align-items:center;gap:8px}
+  #meterOuter{
+    flex:1;width:26px;border:2px solid var(--steel);background:#06090f;
+    position:relative;overflow:hidden;box-shadow:inset 0 0 18px rgba(0,0,0,.9);
+  }
+  #meterFill{
+    position:absolute;left:0;bottom:0;width:100%;height:50%;
+    background:linear-gradient(0deg,var(--crimson),var(--amber) 46%,var(--bone));
+    transition:height .09s linear;
+  }
+  #meterOuter::after{
+    content:"";position:absolute;left:0;right:0;bottom:25%;height:2px;
+    background:var(--crimson);opacity:.9;box-shadow:0 0 8px var(--crimson);
+  }
+  #meterLbl{font-size:9px;letter-spacing:.22em;color:var(--steel);writing-mode:vertical-rl;transform:rotate(180deg)}
+  #meterWrap.danger #meterFill{animation:dangerPulse .32s infinite alternate}
+  @keyframes dangerPulse{from{filter:brightness(1)}to{filter:brightness(2.1) saturate(1.6)}}
+
+  #judge{
+    position:absolute;left:50%;top:57%;transform:translate(-50%,-50%) skewX(-8deg);
+    font-family:Impact,Haettenschweiler,"Arial Narrow Bold",sans-serif;text-transform:uppercase;
+    font-size:clamp(30px,5vw,64px);opacity:0;pointer-events:none;white-space:nowrap;
+  }
+  #judge.pop{animation:judgePop .46s ease-out forwards}
+  @keyframes judgePop{
+    0%{opacity:0;transform:translate(-50%,-50%) skewX(-8deg) scale(.55)}
+    22%{opacity:1;transform:translate(-50%,-50%) skewX(-8deg) scale(1.16)}
+    55%{opacity:1;transform:translate(-50%,-58%) skewX(-8deg) scale(1)}
+    100%{opacity:0;transform:translate(-50%,-84%) skewX(-8deg) scale(.94)}
+  }
+
+  #keyRow{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:14px}
+  #hud:not(.on) #keyRow{pointer-events:none}
+  .keyCap{
+    width:52px;padding:6px 0;text-align:center;font-family:Impact,sans-serif;font-size:17px;
+    border:2px solid rgba(242,244,243,.35);color:rgba(242,244,243,.7);background:rgba(6,10,17,.55);
+    transition:transform .05s,box-shadow .08s,color .08s;
+  }
+  .keyCap.down{transform:translateY(3px) scale(.94);color:#fff}
+
+  /* 4x rage border */
+  #rage{
+    position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .22s;
+    box-shadow:inset 0 0 60px 10px rgba(186,18,0,.6),inset 0 0 160px 34px rgba(186,18,0,.14);
+    border:4px solid rgba(186,18,0,.85);
+  }
+  #rage.on{opacity:1;animation:rageFlick .5s infinite alternate}
+  @keyframes rageFlick{from{filter:brightness(.85)}to{filter:brightness(1.35)}}
+
+  #flash{position:absolute;inset:0;pointer-events:none;background:#f2f4f3;opacity:0}
+
+  /* ---------- results ---------- */
+  #resTitle{font-size:clamp(40px,8vw,104px)}
+  .statGrid{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:10px 26px;width:100%}
+  .statGrid div{display:flex;justify-content:space-between;border-bottom:1px solid rgba(70,117,153,.28);padding:7px 2px;font-size:14px;letter-spacing:.1em}
+  .statGrid b{font-family:Impact,sans-serif;font-size:19px;color:var(--amber);transform:skewX(-8deg)}
+  /* ---------- controller setup ---------- */
+  #padSlots{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:100%}
+  .slot{
+    display:flex;align-items:center;gap:10px;padding:8px 10px;
+    border:1px solid rgba(70,117,153,.35);background:rgba(6,10,17,.6);
+  }
+  .slot .dot{width:10px;height:10px;flex:0 0 10px;border-radius:50%;background:#22303f;box-shadow:none}
+  .slot.live .dot{background:var(--amber);box-shadow:0 0 10px var(--amber)}
+  .slot .num{
+    font-family:Impact,sans-serif;transform:skewX(-8deg);font-size:15px;
+    color:var(--steel);flex:0 0 46px;letter-spacing:.06em;
+  }
+  .slot.live .num{color:var(--bone)}
+  .slot .who{font-size:11px;letter-spacing:.08em;color:#6c8093;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .slot.live .who{color:var(--bone)}
+  .slot .meta{margin-left:auto;font-size:10px;letter-spacing:.14em;color:var(--steel);white-space:nowrap}
+
+  #padLanes{gap:8px}
+  .lanePill{
+    min-width:64px;padding:8px 6px;text-align:center;border:2px solid;
+    font-family:Impact,sans-serif;transform:skewX(-8deg);font-size:14px;
+    background:rgba(6,10,17,.6);transition:background .05s,box-shadow .08s,color .05s;
+  }
+  .lanePill small{display:block;font-family:"Arial Narrow",Arial,sans-serif;font-size:9px;letter-spacing:.16em;transform:skewX(8deg);opacity:.7}
+  .lanePill.lit{color:#0d1321 !important;box-shadow:0 0 20px currentColor}
+
+  #bindRows{display:flex;flex-direction:column;gap:6px;width:100%}
+  .bindRow{display:flex;align-items:center;gap:10px}
+  .bindRow .lane{
+    font-family:Impact,sans-serif;transform:skewX(-8deg);font-size:15px;
+    flex:0 0 34px;text-align:center;
+  }
+  .chip{
+    flex:1 1 0;padding:7px 10px;text-align:center;font-size:12px;letter-spacing:.14em;
+    border:1px solid rgba(70,117,153,.4);background:rgba(6,10,17,.6);color:var(--bone);
+    text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .chip.none{color:#5d7182}
+  .chip .tag{color:var(--steel);font-size:9px;letter-spacing:.2em;margin-right:6px}
+  .bindRow button{font-size:13px;padding:6px 14px;flex:0 0 auto}
+  .bindRow.arming .chip{border-color:var(--crimson);color:var(--crimson);animation:armBlink .6s infinite alternate}
+  @keyframes armBlink{from{opacity:.45}to{opacity:1}}
+
+  #padRaw{display:flex;flex-wrap:wrap;gap:4px;margin-top:10px}
+  .btnCell{
+    width:30px;padding:4px 0;text-align:center;font-size:10px;
+    border:1px solid rgba(70,117,153,.35);color:#6c8093;background:rgba(6,10,17,.6);
+  }
+  .btnCell.lit{border-color:var(--crimson);color:var(--bone);background:rgba(186,18,0,.45);box-shadow:0 0 10px rgba(186,18,0,.7)}
+  .btnCell.mapped{border-color:rgba(242,244,243,.5);color:var(--bone)}
+  #padAxes{margin-top:10px;text-align:left;font-family:"Courier New",monospace;letter-spacing:0}
+  #padMap{text-align:left;line-height:1.9}
+  #padMap b{color:var(--bone);font-weight:normal}
+
+  #padTag{
+    position:absolute;left:16px;bottom:16px;font-size:10px;letter-spacing:.22em;
+    color:var(--steel);text-transform:uppercase;opacity:0;transition:opacity .25s;
+  }
+  #padTag.on{opacity:.9}
+  #padTag b{color:var(--amber);font-weight:normal}
+
+  #pauseTag{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) skewX(-8deg);
+    font-family:Impact,sans-serif;font-size:64px;color:var(--bone);text-shadow:0 0 30px var(--crimson);
+  }
+</style>
+</head>
+<body>
+<canvas id="webgl-canvas"></canvas>
+
+<div id="ui-layer">
+
+  <!-- ============ MENU ============ -->
+  <div class="screen" id="menu">
+    <div class="metal" id="title">Rock &amp; <span>Goofy!!!</span></div>
+    <div id="subtitle">Thrash / Stadium / Five Lanes</div>
+    <div class="hint">Five lanes at every difficulty &mdash; only the speed, the note count and the timing windows change.</div>
+    <div class="rule"></div>
+
+    <div class="panel">
+      <h2>1 &mdash; Choose Weapon</h2>
+      <div class="row">
+        <button class="primary" id="btnDemo">Play Demo Riff</button>
+        <span class="label">or</span>
+        <button id="btnPick">Load MP3 / WAV</button>
+      </div>
+      <div id="drop">Drag &amp; drop an audio file here</div>
+      <div id="filename"></div>
+      <input type="file" id="file" accept="audio/*,.mp3,.wav,.ogg,.m4a" style="display:none">
+    </div>
+
+    <div class="panel">
+      <h2>2 &mdash; Difficulty</h2>
+      <div class="row" id="diffRow">
+        <button data-diff="easy">Easy &middot; Slow &amp; Sparse</button>
+        <button data-diff="medium" class="sel">Medium &middot; Steady</button>
+        <button data-diff="hard">Hard &middot; Fast &amp; Dense</button>
+      </div>
+      <div class="row" id="qualRow" style="margin-top:10px">
+        <button data-qual="low">Quality &middot; Low</button>
+        <button data-qual="high">Quality &middot; High</button>
+      </div>
+      <div class="hint" style="margin-top:8px">Changing quality reloads the page.</div>
+    </div>
+
+    <div class="panel">
+      <h2>3 &mdash; Controls &amp; Sync</h2>
+      <div class="row" id="schemeRow">
+        <button data-scheme="ergo" class="sel">Two Hands &middot; D F J K L</button>
+        <button data-scheme="classic">One Hand &middot; A S D F Space</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button id="btnPad">Use Controllers</button>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <span class="label">Sync Offset</span>
+        <input type="range" id="offset" min="-200" max="200" step="5" value="0">
+        <span class="label" id="offsetVal">0 ms</span>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        Hold the key through the glowing tail on sustain notes.<br>
+        <kbd>Esc</kbd> pause &middot; <kbd>R</kbd> restart &middot; negative offset = notes hit earlier<br>
+        Gamepad / guitar controller auto-detected &middot; every key and button is
+        remappable under <b>Use Controllers</b>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CONTROLLER SETUP ============ -->
+  <div class="screen hidden" id="padScreen">
+    <div class="metal" style="font-size:clamp(24px,4.4vw,54px);color:var(--bone);text-shadow:3px 0 0 var(--crimson),0 0 22px rgba(186,18,0,.6),0 5px 0 #06090f">
+      Controller Setup
+    </div>
+    <div class="rule"></div>
+
+    <div class="panel">
+      <h2>Detected Devices</h2>
+      <div id="padSlots"></div>
+      <div class="hint" id="padPrompt" style="margin-top:10px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Live Input</h2>
+      <div class="row" id="padLanes"></div>
+      <div id="padRaw"></div>
+      <div class="hint" id="padAxes"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Input Bindings</h2>
+      <div id="bindRows"></div>
+      <div class="row" style="margin-top:12px">
+        <button data-preset="ergo">Keys: D F J K L</button>
+        <button data-preset="classic">Keys: A S D F Space</button>
+        <button data-preset="frets">Pad: Frets 1&ndash;5</button>
+        <button data-preset="bumpers">Pad: LB LT A RT RB</button>
+      </div>
+      <div class="hint" id="padMap" style="margin-top:12px"></div>
+    </div>
+
+    <div class="row">
+      <button id="padRumble">Test Rumble</button>
+      <button class="primary" id="padDone">Done</button>
+    </div>
+  </div>
+
+  <!-- ============ LOADING ============ -->
+  <div class="screen hidden" id="loading">
+    <div class="metal" style="font-size:clamp(24px,4vw,48px);color:var(--crimson);text-shadow:0 0 24px var(--crimson)">Charting the Riff</div>
+    <div id="barOuter"><div id="barFill"></div></div>
+    <div id="loadTxt">Decoding&hellip;</div>
+  </div>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud">
+    <div id="hudTop">
+      <div id="scoreBox">
+        <div class="metal" id="score">0</div>
+        <div class="label">Score</div>
+      </div>
+      <div id="hudTitle" class="metal">Rock &amp; Goofy!!!<small>Live at the Void</small></div>
+      <div id="statBox">
+        <div class="metal" id="acc">100%</div>
+        <div id="notesLeft">0 / 0 notes</div>
+      </div>
+    </div>
+
+    <div id="comboBox">
+      <div class="metal" id="mult">1x</div>
+      <div class="metal" id="combo">0</div>
+      <div id="comboLbl">Streak</div>
+    </div>
+
+    <div id="meterWrap">
+      <div id="meterOuter"><div id="meterFill"></div></div>
+      <div id="meterLbl">Rock Meter</div>
+    </div>
+
+    <div class="metal" id="judge"></div>
+    <div id="keyRow"></div>
+    <div id="rage"></div>
+    <div id="flash"></div>
+  </div>
+
+  <!-- ============ RESULT ============ -->
+  <div class="screen hidden" id="result">
+    <div class="metal" id="resTitle">Song Complete</div>
+    <div class="rule"></div>
+    <div class="panel">
+      <h2 id="resSub">Setlist Report</h2>
+      <div class="statGrid">
+        <div><span>Score</span><b id="rScore">0</b></div>
+        <div><span>Accuracy</span><b id="rAcc">0%</b></div>
+        <div><span>Best Streak</span><b id="rStreak">0</b></div>
+        <div><span>Notes Hit</span><b id="rHit">0</b></div>
+        <div><span>Perfect</span><b id="rPerfect">0</b></div>
+        <div><span>Great</span><b id="rGreat">0</b></div>
+        <div><span>Ok</span><b id="rOk">0</b></div>
+        <div><span>Missed</span><b id="rMiss">0</b></div>
+      </div>
+    </div>
+    <div class="row">
+      <button class="primary" id="btnAgain">Encore (Retry)</button>
+      <button id="btnMenu">Back Stage</button>
+    </div>
+  </div>
+
+  <div id="padTag"></div>
+  <div class="metal hidden" id="pauseTag">Paused</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+/* ==========================================================================
+   ROCK & GOOFY!!!  — single-file 3D rhythm game
+   Modules: Audio · Synth · Analyzer · World3D · Highway3D · Input · Engine
+   ========================================================================== */
+
+/* ------------------------------ palette ---------------------------------- */
+const C_NAVY    = 0x0d1321;
+const C_CRIMSON = 0xba1200;
+const C_BONE    = 0xf2f4f3;
+const C_STEEL   = 0x467599;
+const LANE_COLORS = [0x467599, 0xba1200, 0xf2f4f3, 0xe5a93b, 0x00d2ff];
+const C_DUSK    = 0x131a2e;   // mid sky
+const C_HORIZON = 0x2a1520;   // deep wine at the horizon; also the fog colour
+const C_ZENITH  = 0x090d18;   // darkest, straight up
+
+/* ------------------------------ tunables --------------------------------- */
+const LANE_X       = [-3.2, -1.6, 0, 1.6, 3.2];
+const LANE_W       = 1.5;
+const TRAVEL_DIST  = 34;          // world units from spawn to receptor
+const GEM_POOL     = 80;
+const TAIL_POOL    = 24;
+const PARTICLES    = 90;
+const CROWD        = 1200;
+
+/* Quality tiers. Resolved once at boot: InstancedMesh counts are fixed at
+   construction, so changing the setting reloads the page rather than
+   rebuilding the scene. LOW is the integrated-GPU configuration. */
+const QUALITY = {
+  low:  { farCrowd:0,    palms:16, phones:200, stars:200, wheelChase:false, glows:false },
+  high: { farCrowd:4000, palms:36, phones:900, stars:500, wheelChase:true,  glows:true  }
+};
+let QNAME = 'high';
+try { if(localStorage.getItem('rockgoofy.quality') === 'low') QNAME = 'low'; }
+catch(e){ /* private mode: fall through to high */ }
+const Q = QUALITY[QNAME];
+
+const WIN_PERFECT = 0.045, WIN_GREAT = 0.090, WIN_OK = 0.140;
+
+/* All five lanes are always live. Difficulty changes how FAST notes come and
+   how MANY there are — plus how forgiving the timing windows and meter are.
+     gap      minimum seconds between notes (density)
+     mult     onset threshold vs local mean (higher = only the strong hits)
+     approach seconds a note takes to travel the highway (lower = faster)
+     window   timing-window scale (1.5 = 50% more generous than spec)
+     drain    miss penalty scale against the base -6% */
+const DIFF = {
+  easy:   { gap:0.42, mult:2.50, sustain:false, chords:false, approach:2.20, maxSus:0,   window:1.55, drain:0.50 },
+  medium: { gap:0.32, mult:2.15, sustain:true,  chords:false, approach:1.95, maxSus:1.4, window:1.40, drain:0.60 },
+  hard:   { gap:0.17, mult:1.70, sustain:true,  chords:true,  approach:1.50, maxSus:2.2, window:1.15, drain:0.80 }
+};
+
+/* Keyboard presets. Every binding is user-remappable at runtime; these are
+   only the starting points. */
+const KEY_PRESETS = {
+  ergo:    ['KeyD', 'KeyF', 'KeyJ', 'KeyK', 'KeyL'],
+  classic: ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'Space']
+};
+
+/* Pad slots 0-23 are real buttons; 24-27 are the stick / d-pad hat directions,
+   kept out of the button range so a bound button 2 is never also "stick left". */
+const PAD_AXIS = 24;
+const PAD_SLOTS = 28;
+const PAD_PRESETS = {
+  frets: [0, 1, 2, 3, 4],                 // GH / Rock Band frets, A B X Y + LB
+  bumpers: [4, 6, 0, 7, 5]                // LB LT A RT RB
+};
+
+/* ------------------------------ dom -------------------------------------- */
+const $ = id => document.getElementById(id);
+const elMenu=$('menu'), elLoading=$('loading'), elHud=$('hud'), elResult=$('result');
+const elBar=$('barFill'), elLoadTxt=$('loadTxt');
+const elScore=$('score'), elAcc=$('acc'), elNotesLeft=$('notesLeft');
+const elMult=$('mult'), elCombo=$('combo'), elMeter=$('meterFill'), elMeterWrap=$('meterWrap');
+const elJudge=$('judge'), elRage=$('rage'), elFlash=$('flash'), elKeyRow=$('keyRow'), elPause=$('pauseTag');
+const elPadTag=$('padTag'), elPadScreen=$('padScreen');
+
+/* ==========================================================================
+   G — game state (single mutable record, no per-frame allocation)
+   ========================================================================== */
+const G = {
+  state:'menu',                 // menu | loading | play | paused | over
+  diff:'medium',
+  scheme:'ergo',
+  syncOffset:0,                 // seconds, user calibration
+  chart:[], windowStart:0,
+  buffer:null, source:null,
+  startAt:0, pausedAtCtx:0, songTime:0, songLen:0,
+  env:null, envRate:60,         // per-band envelope for visuals
+  score:0, combo:0, best:0, mult:1, meter:50,
+  counts:{ perfect:0, great:0, ok:0, miss:0 },
+  totalNotes:0, judged:0,
+  held:[false,false,false,false,false],
+  activeSustain:[null,null,null,null,null],
+  laneFlash:[0,0,0,0,0],
+  bassLevel:0, midLevel:0, strobe:0,
+  kick:0, snare:0, bassPrev:0, midPrev:0,   // drum-hit pulses for the band rig
+  bands:[0,0,0,0,0],                        // smoothed 5-band level for the LED wall
+  blind:0, pyroFired:false,
+  fileName:'',
+  hudDirty:false, judgeText:null, judgeColor:null, flashAlpha:0
+};
+
+/* ==========================================================================
+   MODULE: Audio
+   ========================================================================== */
+const Audio_ = {
+  ctx:null,
+  init(){
+    if(!this.ctx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+    }
+    if(this.ctx.state === 'suspended') this.ctx.resume();
+    return this.ctx;
+  },
+  decodeFile(file){
+    const ctx = this.init();
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onerror = () => rej(new Error('File read failed'));
+      fr.onload = () => {
+        // callback form: widest browser support incl. Safari
+        ctx.decodeAudioData(fr.result, res, () => rej(new Error('Could not decode that audio file')));
+      };
+      fr.readAsArrayBuffer(file);
+    });
+  },
+  play(buffer, when){
+    const ctx = this.init();
+    this.stop();
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const g = ctx.createGain();
+    g.gain.value = 0.9;
+    src.connect(g).connect(ctx.destination);
+    src.start(when);
+    G.source = src;
+    return src;
+  },
+  stop(){
+    if(G.source){
+      try { G.source.stop(); } catch(e){}
+      try { G.source.disconnect(); } catch(e){}
+      G.source = null;
+    }
+  },
+  /* crowd boo: descending filtered noise + detuned sub growl */
+  boo(){
+    const ctx = this.init(), t = ctx.currentTime;
+    const n = ctx.createBufferSource();
+    n.buffer = Synth.noise(ctx, 2.4);
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.Q.value = 1.1;
+    bp.frequency.setValueAtTime(900, t);
+    bp.frequency.exponentialRampToValueAtTime(180, t + 2.2);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.5, t + 0.18);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 2.3);
+    n.connect(bp).connect(g).connect(ctx.destination);
+    n.start(t); n.stop(t + 2.4);
+
+    [70, 82, 96].forEach((f, i) => {
+      const o = ctx.createOscillator(), og = ctx.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.exponentialRampToValueAtTime(f * 0.55, t + 2.0);
+      og.gain.setValueAtTime(0.0001, t);
+      og.gain.linearRampToValueAtTime(0.10, t + 0.25 + i * 0.05);
+      og.gain.exponentialRampToValueAtTime(0.0001, t + 2.2);
+      o.connect(og).connect(ctx.destination);
+      o.start(t); o.stop(t + 2.3);
+    });
+  },
+  /* crowd cheer on song clear */
+  cheer(){
+    const ctx = this.init(), t = ctx.currentTime;
+    const n = ctx.createBufferSource();
+    n.buffer = Synth.noise(ctx, 3.0);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'bandpass'; hp.Q.value = 0.7; hp.frequency.value = 2200;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.42, t + 0.3);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 2.9);
+    n.connect(hp).connect(g).connect(ctx.destination);
+    n.start(t); n.stop(t + 3.0);
+  }
+};
+
+/* ==========================================================================
+   MODULE: Synth — procedural 30s thrash riff rendered offline
+   ========================================================================== */
+const Synth = {
+  noise(ctx, sec){
+    const len = Math.max(1, Math.floor(ctx.sampleRate * sec));
+    const b = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for(let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return b;
+  },
+  /**
+   * Render the built-in demo riff to an AudioBuffer (30 s).
+   * Written straight into the sample array — an OfflineAudioContext graph with
+   * this many voices takes ~80 s to render, this takes ~100 ms.
+   */
+  render(){
+    const ctx = Audio_.init();
+    const SR = ctx.sampleRate, SEC = 30;
+    const N = Math.floor(SR * SEC);
+    const m = new Float32Array(N);
+
+    /* --- voices: each one mixes itself into m --- */
+
+    const kick = (t, amp) => {
+      const s0 = Math.floor(t * SR), n = Math.min(N - s0, Math.floor(0.24 * SR));
+      if(s0 < 0 || n <= 0) return;
+      const glide = 0.11 * SR, click = 0.005 * SR;
+      let ph = 0;
+      for(let i = 0; i < n; i++){
+        const f = 152 * Math.pow(42 / 152, Math.min(1, i / glide));
+        ph += f / SR; if(ph > 1) ph -= 1;
+        let v = Math.sin(ph * 6.283185307) * Math.exp(-i / (0.055 * SR));
+        if(i < click) v += (Math.random() * 2 - 1) * 0.55 * (1 - i / click);
+        m[s0 + i] += v * amp;
+      }
+    };
+
+    const snare = (t, amp) => {
+      const s0 = Math.floor(t * SR), n = Math.min(N - s0, Math.floor(0.20 * SR));
+      if(s0 < 0 || n <= 0) return;
+      let lp1 = 0, lp2 = 0, ph = 0;
+      for(let i = 0; i < n; i++){
+        const x = Math.random() * 2 - 1;
+        lp1 += (x - lp1) * 0.28;          // ~2.4 kHz
+        lp2 += (x - lp2) * 0.055;         // ~400 Hz
+        const body = (lp1 - lp2) * 2.4;   // band-passed crack (lane 3)
+        const f = 205 * Math.pow(150 / 205, Math.min(1, i / (0.08 * SR)));
+        ph += f / SR; if(ph > 1) ph -= 1;
+        const e = Math.exp(-i / (0.042 * SR));
+        m[s0 + i] += (body + Math.sin(ph * 6.283185307) * 0.42) * e * amp;
+      }
+    };
+
+    /* metal cymbals: twice-differentiated noise = steep high-shelf (lane 5) */
+    const metal = (t, dur, amp) => {
+      const s0 = Math.floor(t * SR), n = Math.min(N - s0, Math.floor((dur + 0.02) * SR));
+      if(s0 < 0 || n <= 0) return;
+      let x1 = 0, x2 = 0;
+      const tau = dur * 0.34 * SR;
+      for(let i = 0; i < n; i++){
+        const x = Math.random() * 2 - 1;
+        const y = x - 2 * x1 + x2;
+        x2 = x1; x1 = x;
+        m[s0 + i] += y * 0.25 * Math.exp(-i / tau) * amp;
+      }
+    };
+
+    /* palm-muted power chord: root + fifth + octave, detuned saws into tanh */
+    const chord = (t, f, dur, amp) => {
+      const s0 = Math.floor(t * SR), n = Math.min(N - s0, Math.floor((dur + 0.04) * SR));
+      if(s0 < 0 || n <= 0) return;
+      const f0 = [f, f * 1.4983, f * 2], a0 = [1, 0.78, 0.44];
+      const p = [0.0, 0.31, 0.67], q = [0.5, 0.11, 0.83];
+      const atk = 0.004 * SR, sus = dur * 0.7 * SR, rel = Math.max(1, dur * 0.3 * SR);
+      let lp = 0;
+      for(let i = 0; i < n; i++){
+        let x = 0;
+        for(let k = 0; k < 3; k++){
+          p[k] += f0[k] * 0.994 / SR; if(p[k] > 1) p[k] -= 1;
+          q[k] += f0[k] * 1.007 / SR; if(q[k] > 1) q[k] -= 1;
+          x += a0[k] * ((p[k] * 2 - 1) + (q[k] * 2 - 1)) * 0.5;
+        }
+        x = Math.tanh(x * 3.4);
+        lp += (x - lp) * 0.45;            // ~4.2 kHz cabinet roll-off
+        const e = i < atk ? i / atk : (i < sus ? 1 : Math.max(0, 1 - (i - sus) / rel));
+        m[s0 + i] += lp * e * amp;
+      }
+    };
+
+    /* screaming lead: single saw, harder clip, brighter filter (lane 4) */
+    const lead = (t, f, dur, amp) => {
+      const s0 = Math.floor(t * SR), n = Math.min(N - s0, Math.floor((dur + 0.03) * SR));
+      if(s0 < 0 || n <= 0) return;
+      const atk = 0.006 * SR, sus = dur * 0.72 * SR, rel = Math.max(1, dur * 0.28 * SR);
+      let ph = 0, lp = 0;
+      for(let i = 0; i < n; i++){
+        ph += f / SR; if(ph > 1) ph -= 1;
+        const x = Math.tanh((ph * 2 - 1) * 5.5);
+        lp += (x - lp) * 0.72;            // ~8 kHz
+        const e = i < atk ? i / atk : (i < sus ? 1 : Math.max(0, 1 - (i - sus) / rel));
+        m[s0 + i] += lp * e * amp;
+      }
+    };
+
+    const hat   = (t, open) => metal(t, open ? 0.17 : 0.045, open ? 0.55 : 0.40);
+    const crash = t => metal(t, 1.1, 0.85);
+
+    /* --- arrangement: 180 BPM, 16th grid --- */
+    const BPM = 180, beat = 60 / BPM, six = beat / 4;   // 0.0833 s
+    const E = 82.41, F = 87.31, G_ = 98.0, A = 110.0, D = 73.42, C = 65.41;
+
+    // gallop chug patterns per bar (16 sixteenths, 0 = rest)
+    const riffs = [
+      [E,0,E, E,0,E, E,0, G_,0,G_, F,0, E,0,0],
+      [E,0,E, E,0,E, E,0, A,0,A,  G_,0, F,0,0],
+      [E,E,0, E,E,0, D,0, C,0,C,  D,0,  E,0,0],
+      [E,0,E, E,0,E, G_,G_, A,0,A, C,0,  E,E,0]
+    ];
+    const leadScale = [329.63, 349.23, 392.0, 440.0, 493.88, 523.25, 587.33, 659.25];
+
+    const totalBars = Math.floor(SEC / (beat * 4));
+    for(let bar = 0; bar < totalBars; bar++){
+      const t0 = bar * beat * 4;
+      if(t0 > SEC - 0.4) break;
+      const riff = riffs[bar % riffs.length];
+      const phraseEnd = (bar % 4) === 3;     // let last chord of phrase ring out
+
+      if(bar % 4 === 0) crash(t0);
+
+      for(let s = 0; s < 16; s++){
+        const t = t0 + s * six;
+        if(t > SEC - 0.3) break;
+
+        // kick: downbeats + gallop accents
+        if(s === 0 || s === 3 || s === 6 || s === 8 || s === 11 || s === 14) kick(t, 1.0);
+        // snare on beats 2 and 4
+        if(s === 4 || s === 12) snare(t, 0.85);
+        if(bar % 8 === 7 && (s === 10 || s === 14)) snare(t, 0.7);   // fill
+        // hats on every 16th, open on offbeats
+        hat(t, s % 8 === 6);
+
+        // guitar
+        const f = riff[s];
+        if(f){
+          const ring = (phraseEnd && s >= 13) ? six * 9 : six * 0.9;
+          chord(t, f, ring, 0.42);
+        }
+      }
+      // lead line every other bar in the upper register (feeds lane 4)
+      if(bar % 2 === 1){
+        for(let s = 0; s < 8; s++){
+          const t = t0 + beat * 2 + s * (six * 0.98);
+          if(t > SEC - 0.4) break;
+          lead(t, leadScale[(bar * 3 + s * 2) % leadScale.length],
+               s === 7 ? 0.60 : six * 0.85, 0.26);
+        }
+      }
+    }
+
+    /* normalize + soft clip, then hand back a real AudioBuffer */
+    let peak = 1e-6;
+    for(let i = 0; i < N; i++){ const a = Math.abs(m[i]); if(a > peak) peak = a; }
+    const g = 0.92 / peak;
+    const buf = ctx.createBuffer(2, N, SR);
+    const L = buf.getChannelData(0), R = buf.getChannelData(1);
+    const d = Math.floor(SR * 0.012);                 // haas widening
+    for(let i = 0; i < N; i++){
+      const v = Math.tanh(m[i] * g * 1.15) * 0.94;
+      L[i] = v;
+      R[i] = v * 0.82 + (i >= d ? Math.tanh(m[i - d] * g) * 0.18 : 0);
+    }
+    return Promise.resolve(buf);
+  }
+};
+
+/* ==========================================================================
+   MODULE: Analyzer — offline 5-band onset + sustain detection
+   ========================================================================== */
+const Analyzer = {
+  WIN: 2048, HOP: 512,
+  BANDS: [[40,120],[120,400],[400,1600],[1600,4500],[4500,14000]],
+
+  fft(re, im){
+    const n = re.length;
+    for(let i = 1, j = 0; i < n; i++){
+      let bit = n >> 1;
+      for(; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if(i < j){
+        let t = re[i]; re[i] = re[j]; re[j] = t;
+        t = im[i]; im[i] = im[j]; im[j] = t;
+      }
+    }
+    for(let len = 2; len <= n; len <<= 1){
+      const ang = -2 * Math.PI / len;
+      const wr = Math.cos(ang), wi = Math.sin(ang), half = len >> 1;
+      for(let i = 0; i < n; i += len){
+        let cr = 1, ci = 0;
+        for(let k = 0; k < half; k++){
+          const ar = re[i+k], ai = im[i+k];
+          const br = re[i+k+half], bi = im[i+k+half];
+          const vr = br * cr - bi * ci;
+          const vi = br * ci + bi * cr;
+          re[i+k] = ar + vr; im[i+k] = ai + vi;
+          re[i+k+half] = ar - vr; im[i+k+half] = ai - vi;
+          const ncr = cr * wr - ci * wi;
+          ci = cr * wi + ci * wr; cr = ncr;
+        }
+      }
+    }
+  },
+
+  /**
+   * Analyze buffer in time-sliced chunks so the UI stays responsive.
+   * Resolves with { flux[5][], energy[5][], frames, frameSec }.
+   */
+  scan(buffer, onProgress){
+    const WIN = this.WIN, HOP = this.HOP, SR = buffer.sampleRate;
+    const ch = buffer.numberOfChannels;
+    const n = buffer.length;
+
+    // mono downmix (one allocation, reused)
+    const mono = new Float32Array(n);
+    for(let c = 0; c < ch; c++){
+      const d = buffer.getChannelData(c);
+      for(let i = 0; i < n; i++) mono[i] += d[i] / ch;
+    }
+
+    const frames = Math.max(1, Math.floor((n - WIN) / HOP));
+    const frameSec = HOP / SR;
+    const binHz = SR / WIN;
+
+    const bandLo = [], bandHi = [];
+    for(const [lo, hi] of this.BANDS){
+      bandLo.push(Math.max(1, Math.floor(lo / binHz)));
+      bandHi.push(Math.min((WIN >> 1) - 1, Math.ceil(hi / binHz)));
+    }
+
+    const flux   = this.BANDS.map(() => new Float32Array(frames));
+    const energy = this.BANDS.map(() => new Float32Array(frames));
+
+    const re = new Float32Array(WIN), im = new Float32Array(WIN);
+    const mag = new Float32Array(WIN >> 1);
+    const prev = new Float32Array(WIN >> 1);
+    const hann = new Float32Array(WIN);
+    for(let i = 0; i < WIN; i++) hann[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (WIN - 1));
+
+    let f = 0;
+    const CHUNK = 240;
+
+    return new Promise(resolve => {
+      const step = () => {
+        const end = Math.min(frames, f + CHUNK);
+        for(; f < end; f++){
+          const off = f * HOP;
+          for(let i = 0; i < WIN; i++){ re[i] = mono[off + i] * hann[i]; im[i] = 0; }
+          this.fft(re, im);
+          for(let k = 0; k < mag.length; k++) mag[k] = Math.sqrt(re[k]*re[k] + im[k]*im[k]);
+
+          for(let b = 0; b < 5; b++){
+            let fl = 0, en = 0;
+            const lo = bandLo[b], hi = bandHi[b];
+            for(let k = lo; k <= hi; k++){
+              const d = mag[k] - prev[k];
+              if(d > 0) fl += d;
+              en += mag[k];
+            }
+            const w = (hi - lo + 1);
+            flux[b][f]   = fl / w;
+            energy[b][f] = en / w;
+          }
+          prev.set(mag);
+        }
+        if(onProgress) onProgress(f / frames);
+        if(f < frames) setTimeout(step, 0);
+        else resolve({ flux, energy, frames, frameSec });
+      };
+      step();
+    });
+  },
+
+  /** Peak-pick the flux curves into a playable chart. */
+  buildChart(scan, diffName){
+    const D = DIFF[diffName];
+    const { flux, energy, frames, frameSec } = scan;
+    const raw = [];
+    const HALF = Math.round(0.28 / frameSec);          // local-mean window
+    const minFrames = Math.max(2, Math.round(0.11 / frameSec));
+
+    for(let lane = 0; lane < 5; lane++){
+      const fx = flux[lane], en = energy[lane];
+      let gmax = 0;
+      for(let i = 0; i < frames; i++) if(fx[i] > gmax) gmax = fx[i];
+      if(gmax <= 0) continue;
+      const floor_ = gmax * 0.055;                      // ignore noise-floor wobble
+      let last = -1e9;
+
+      for(let i = 1; i < frames - 1; i++){
+        const v = fx[i];
+        if(v < floor_) continue;
+        if(v < fx[i-1] || v < fx[i+1]) continue;
+        let sum = 0, cnt = 0;
+        const a = Math.max(0, i - HALF), b = Math.min(frames - 1, i + HALF);
+        for(let j = a; j <= b; j++){ sum += fx[j]; cnt++; }
+        if(v <= (sum / cnt) * D.mult) continue;
+        if(i - last < minFrames) continue;
+        last = i;
+
+        // sustain scan: band energy staying above half the onset level
+        let dur = 0;
+        if(D.sustain){
+          const base = en[i];
+          let j = i + 1;
+          const cap = i + Math.round(D.maxSus / frameSec);
+          while(j < frames && j < cap && en[j] > base * 0.5) j++;
+          const d = (j - i) * frameSec;
+          if(d >= 0.25) dur = Math.min(d, D.maxSus);
+        }
+        raw.push({ time: i * frameSec, lane, duration: dur, isSustain: dur > 0, strength: v / gmax });
+      }
+    }
+
+    raw.sort((a, b) => a.time - b.time || a.lane - b.lane);
+
+    /* Thin out. Onsets within 30 ms are one cluster: keep the strongest, biased
+       away from repeating the previous lane so the kick band cannot hog the
+       chart. On hard, a second lane from the same cluster becomes a chord. */
+    const chart = [];
+    let lastLane = -1;
+    for(let i = 0; i < raw.length; ){
+      let j = i;
+      while(j + 1 < raw.length && raw[j + 1].time - raw[i].time < 0.030) j++;
+
+      let bi = i, bs = -1;
+      for(let k = i; k <= j; k++){
+        const s = raw[k].strength * (raw[k].lane === lastLane ? 0.5 : 1);
+        if(s > bs){ bs = s; bi = k; }
+      }
+      const pick = raw[bi];
+      const prev = chart[chart.length - 1];
+      if(!prev || pick.time - prev.time >= D.gap){
+        chart.push(pick);
+        lastLane = pick.lane;
+        if(D.chords && j > i){
+          let ci = -1, cs = 0.68;
+          for(let k = i; k <= j; k++){
+            if(k === bi || raw[k].lane === pick.lane) continue;
+            if(raw[k].strength > cs){ cs = raw[k].strength; ci = k; }
+          }
+          if(ci >= 0){ raw[ci].time = pick.time; chart.push(raw[ci]); }
+        }
+      }
+      i = j + 1;
+    }
+
+    /* trim sustains that would swallow the next note in the same lane */
+    for(let i = 0; i < chart.length; i++){
+      if(!chart[i].isSustain) continue;
+      for(let j = i + 1; j < chart.length; j++){
+        if(chart[j].time > chart[i].time + chart[i].duration + 0.1) break;
+        if(chart[j].lane === chart[i].lane){
+          chart[i].duration = Math.max(0, chart[j].time - chart[i].time - 0.14);
+          chart[i].isSustain = chart[i].duration >= 0.25;
+          break;
+        }
+      }
+    }
+
+    /* per-note runtime fields */
+    for(const nt of chart){
+      nt.hit = false; nt.missed = false; nt.holding = false;
+      nt.holdScored = 0; nt.holdEnd = 0; nt.broken = false;
+    }
+    return chart;
+  },
+
+  /** Downsample band energy to a ~60 Hz envelope for lights + crowd. */
+  envelope(scan){
+    const { energy, frames, frameSec } = scan;
+    const rate = 60;
+    const outLen = Math.max(1, Math.ceil(frames * frameSec * rate));
+    const out = [];
+    for(let b = 0; b < 5; b++){
+      const dst = new Float32Array(outLen);
+      let peak = 1e-9;
+      for(let i = 0; i < outLen; i++){
+        const f0 = Math.floor(i / rate / frameSec);
+        const f1 = Math.min(frames - 1, Math.floor((i + 1) / rate / frameSec));
+        let m = 0;
+        for(let f = f0; f <= f1; f++) if(energy[b][f] > m) m = energy[b][f];
+        dst[i] = m;
+        if(m > peak) peak = m;
+      }
+      for(let i = 0; i < outLen; i++) dst[i] /= peak;
+      out.push(dst);
+    }
+    return out;
+  }
+};
+
+/* --------------------------------------------------------------------------
+   Bake a list of {geo, matrix} into one BufferGeometry. The stage rigging is
+   ~200 static meshes; merged per material it is 4 draw calls instead.
+   -------------------------------------------------------------------------- */
+function mergeParts(items){
+  const nm = new THREE.Matrix3(), v = new THREE.Vector3();
+  let total = 0, hasUV = true;
+  const flat = [];
+  for(const it of items){
+    const g = it.geo.index ? it.geo.toNonIndexed() : it.geo;
+    if(!g.attributes.uv) hasUV = false;
+    total += g.attributes.position.count;
+    flat.push({ g, m: it.matrix });
+  }
+  const pos = new Float32Array(total * 3);
+  const nor = new Float32Array(total * 3);
+  const uvs = hasUV ? new Float32Array(total * 2) : null;
+  let o = 0, u = 0;
+  for(const { g, m } of flat){
+    nm.getNormalMatrix(m);
+    const P = g.attributes.position, N = g.attributes.normal, U = g.attributes.uv;
+    for(let i = 0; i < P.count; i++){
+      v.fromBufferAttribute(P, i).applyMatrix4(m);
+      pos[o] = v.x; pos[o + 1] = v.y; pos[o + 2] = v.z;
+      v.fromBufferAttribute(N, i).applyMatrix3(nm).normalize();
+      nor[o] = v.x; nor[o + 1] = v.y; nor[o + 2] = v.z;
+      o += 3;
+      if(uvs){ uvs[u] = U.getX(i); uvs[u + 1] = U.getY(i); u += 2; }
+    }
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  if(uvs) out.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  out.computeBoundingSphere();
+  return out;
+}
+
+/* ==========================================================================
+   MODULE: Post — bloom, hand-rolled
+   r128 ships EffectComposer as a separate examples file that is not on the
+   allowed CDN, so this is the whole chain: bright pass, two half-res gaussian
+   blurs, additive composite. Four fullscreen quads.
+   The scene renders into a linear target, so the composite does the sRGB
+   conversion the renderer would normally do on the way to the screen.
+   ========================================================================== */
+const Post = {
+  on:true, rt:null, rtA:null, rtB:null, scene:null, cam:null, quad:null,
+  bright:null, blur:null, comp:null,
+
+  VERT: [
+    'varying vec2 vUv;',
+    'void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }'
+  ].join('\n'),
+
+  init(renderer){
+    const w = Math.max(2, innerWidth), h = Math.max(2, innerHeight);
+    /* The target holds LINEAR colour, so 8 bits per channel bands visibly in
+       a room this dark. Half float where it exists, bytes as a fallback. */
+    const half = renderer.capabilities.isWebGL2 ||
+                 !!renderer.extensions.get('OES_texture_half_float');
+    this.type = half ? THREE.HalfFloatType : THREE.UnsignedByteType;
+    const opt = { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter,
+                  format:THREE.RGBAFormat, type:this.type,
+                  depthBuffer:true, stencilBuffer:false };
+    const small = { minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter,
+                    format:THREE.RGBAFormat, type:this.type, depthBuffer:false };
+    this.rt  = new THREE.WebGLRenderTarget(w, h, opt);
+    this.rtA = new THREE.WebGLRenderTarget(w >> 1, h >> 1, small);
+    this.rtB = new THREE.WebGLRenderTarget(w >> 1, h >> 1, small);
+
+    const base = { depthTest:false, depthWrite:false, vertexShader:this.VERT };
+
+    this.bright = new THREE.ShaderMaterial(Object.assign({}, base, {
+      uniforms: { tDiffuse:{ value:null }, threshold:{ value:0.58 } },
+      fragmentShader: [
+        'uniform sampler2D tDiffuse;',
+        'uniform float threshold;',
+        'varying vec2 vUv;',
+        'void main(){',
+        '  vec3 c = texture2D(tDiffuse, vUv).rgb;',
+        '  float l = max(max(c.r, c.g), c.b);',
+        '  float f = max(0.0, l - threshold) / max(l, 1e-4);',
+        '  gl_FragColor = vec4(c * f, 1.0);',
+        '}'
+      ].join('\n')
+    }));
+
+    this.blur = new THREE.ShaderMaterial(Object.assign({}, base, {
+      uniforms: { tDiffuse:{ value:null }, dir:{ value:new THREE.Vector2() } },
+      fragmentShader: [
+        'uniform sampler2D tDiffuse;',
+        'uniform vec2 dir;',
+        'varying vec2 vUv;',
+        'void main(){',
+        '  vec3 s  = texture2D(tDiffuse, vUv).rgb * 0.227027;',
+        '  s += texture2D(tDiffuse, vUv + dir * 1.384615).rgb * 0.316216;',
+        '  s += texture2D(tDiffuse, vUv - dir * 1.384615).rgb * 0.316216;',
+        '  s += texture2D(tDiffuse, vUv + dir * 3.230769).rgb * 0.070270;',
+        '  s += texture2D(tDiffuse, vUv - dir * 3.230769).rgb * 0.070270;',
+        '  gl_FragColor = vec4(s, 1.0);',
+        '}'
+      ].join('\n')
+    }));
+
+    this.comp = new THREE.ShaderMaterial(Object.assign({}, base, {
+      uniforms: { tDiffuse:{ value:null }, tBloom:{ value:null }, strength:{ value:0.62 } },
+      fragmentShader: [
+        'uniform sampler2D tDiffuse;',
+        'uniform sampler2D tBloom;',
+        'uniform float strength;',
+        'varying vec2 vUv;',
+        /* the exact curve r128 uses for sRGBEncoding */
+        'vec3 toSRGB(vec3 v){',
+        '  return mix(pow(v, vec3(0.41666)) * 1.055 - vec3(0.055), v * 12.92,',
+        '             vec3(lessThanEqual(v, vec3(0.0031308))));',
+        '}',
+        'void main(){',
+        '  vec3 c = texture2D(tDiffuse, vUv).rgb + texture2D(tBloom, vUv).rgb * strength;',
+        '  gl_FragColor = vec4(toSRGB(clamp(c, 0.0, 1.0)), 1.0);',
+        '}'
+      ].join('\n')
+    }));
+
+    this.scene = new THREE.Scene();
+    this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.comp);
+    this.quad.frustumCulled = false;
+    this.scene.add(this.quad);
+  },
+
+  resize(){
+    const w = Math.max(2, innerWidth), h = Math.max(2, innerHeight);
+    this.rt.setSize(w, h);
+    this.rtA.setSize(w >> 1, h >> 1);
+    this.rtB.setSize(w >> 1, h >> 1);
+  },
+
+  pass(renderer, mat, target){
+    this.quad.material = mat;
+    renderer.setRenderTarget(target);
+    renderer.render(this.scene, this.cam);
+  },
+
+  /** Called with the finished frame already in this.rt. */
+  run(renderer){
+    const w = this.rtA.width, h = this.rtA.height;
+
+    this.bright.uniforms.tDiffuse.value = this.rt.texture;
+    this.pass(renderer, this.bright, this.rtA);
+
+    this.blur.uniforms.tDiffuse.value = this.rtA.texture;
+    this.blur.uniforms.dir.value.set(1.4 / w, 0);
+    this.pass(renderer, this.blur, this.rtB);
+
+    this.blur.uniforms.tDiffuse.value = this.rtB.texture;
+    this.blur.uniforms.dir.value.set(0, 1.4 / h);
+    this.pass(renderer, this.blur, this.rtA);
+
+    this.comp.uniforms.tDiffuse.value = this.rt.texture;
+    this.comp.uniforms.tBloom.value = this.rtA.texture;
+    this.pass(renderer, this.comp, null);
+  }
+};
+
+/* ==========================================================================
+   MODULE: World3D — scene, stage, truss, amps, spotlights, crowd
+   ========================================================================== */
+const World = {
+  renderer:null, scene:null, play:null, cine:null, playCam:null,
+  spots:[], spotLights:[], strobeLight:null,
+  crowd:null, crowdArr:null,
+  crowdX:null, crowdZ:null, crowdPhase:null, crowdYawC:null, crowdYawS:null,
+  ledMat:null,
+
+  init(){
+    const canvas = $('webgl-canvas');
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias:true, powerPreference:'high-performance' });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    this.renderer.setSize(innerWidth, innerHeight);
+    this.renderer.setClearColor(C_NAVY, 1);
+    if('outputEncoding' in this.renderer) this.renderer.outputEncoding = THREE.sRGBEncoding;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.autoClear = false;        // two passes share the frame
+
+    /* Two scenes, two cameras. The venue camera is free to fly anywhere for
+       the cinematics; the note highway lives in its own scene under a locked
+       camera and is composited on top, so gameplay framing never moves. */
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(C_HORIZON);
+    this.scene.fog = new THREE.Fog(C_HORIZON, 40, 220);
+
+    this.play = new THREE.Scene();
+    this.play.fog = new THREE.Fog(C_NAVY, 22, 82);
+
+    this.cine = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 400);
+    this.cine.position.set(0, 6.5, 18);
+    this.cine.lookAt(0, 3, -30);
+
+    this.playCam = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 400);
+    this.playCam.position.set(0, 4.6, 12);
+    this.playCam.lookAt(0, 5.4, -8);
+
+    /* the highway carries its own rig: it must read the same no matter what
+       the venue lighting is doing */
+    this.play.add(new THREE.AmbientLight(0x243352, 1.6));
+    const pk = new THREE.DirectionalLight(C_BONE, 0.75);
+    pk.position.set(0, 16, 14);
+    this.play.add(pk);
+    this.playRim = new THREE.PointLight(C_CRIMSON, 1.2, 60, 2);
+    this.playRim.position.set(0, 5, -12);
+    this.play.add(this.playRim);
+
+    /* ---- lighting ---- */
+    this.scene.add(new THREE.AmbientLight(0x1a2436, 1.1));
+    const hemi = new THREE.HemisphereLight(C_STEEL, 0x05070c, 0.55);
+    this.scene.add(hemi);
+    const key = new THREE.DirectionalLight(C_BONE, 0.45);
+    key.position.set(0, 24, 14);
+    this.scene.add(key);
+    const rim = new THREE.PointLight(C_CRIMSON, 1.6, 70, 2);
+    rim.position.set(0, 8, -18);
+    this.scene.add(rim);
+    this.rimLight = rim;
+
+    this.strobeLight = new THREE.PointLight(C_BONE, 0, 90, 2);
+    this.strobeLight.position.set(0, 14, -10);
+    this.scene.add(this.strobeLight);
+
+    this.buildStage();
+    this.buildTruss();
+    this.buildAmps();
+    this.buildSpots();
+    this.buildCrowd();
+    this.buildBanner();
+    this.buildLedWall();
+    this.buildBarricade();
+    this.buildProps();
+    this.buildHaze();
+    this.buildBlinders();
+    Festival.init(this.scene);
+    this.buildPhones();
+    this.buildFx();
+    Band.init(this.scene);
+    Post.init(this.renderer);
+
+    addEventListener('resize', () => {
+      const a = innerWidth / innerHeight;
+      this.cine.aspect = a;    this.cine.updateProjectionMatrix();
+      this.playCam.aspect = a; this.playCam.updateProjectionMatrix();
+      this.renderer.setSize(innerWidth, innerHeight);
+      Post.resize();
+    });
+  },
+
+  /* --- procedural canvas texture: grimy steel plate --- */
+  steelTexture(){
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const x = c.getContext('2d');
+    x.fillStyle = '#0d1321'; x.fillRect(0, 0, 256, 256);
+    for(let i = 0; i < 2600; i++){
+      const v = 20 + Math.random() * 70;
+      x.fillStyle = 'rgba(' + (v|0) + ',' + ((v*1.15)|0) + ',' + ((v*1.4)|0) + ',' + (Math.random()*0.35).toFixed(2) + ')';
+      x.fillRect(Math.random()*256, Math.random()*256, 2, 2);
+    }
+    x.strokeStyle = 'rgba(70,117,153,0.30)'; x.lineWidth = 2;
+    for(let i = 0; i <= 256; i += 32){
+      x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 256); x.stroke();
+      x.beginPath(); x.moveTo(0, i); x.lineTo(256, i); x.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  },
+
+  bannerTexture(){
+    const c = document.createElement('canvas');
+    c.width = 1024; c.height = 256;
+    const x = c.getContext('2d');
+    x.fillStyle = '#0a0e18'; x.fillRect(0, 0, 1024, 256);
+    x.strokeStyle = '#ba1200'; x.lineWidth = 10;
+    x.strokeRect(14, 14, 996, 228);
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.font = 'bold 128px Impact, "Arial Black", sans-serif';
+    x.setTransform(1, 0, -0.18, 1, 40, 0);
+    x.fillStyle = '#ba1200';
+    x.fillText('ROCK & GOOFY!!!', 512 + 7, 128 + 6);
+    x.fillStyle = '#f2f4f3';
+    x.fillText('ROCK & GOOFY!!!', 512, 128);
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.font = '28px "Arial Narrow", Arial, sans-serif';
+    x.fillStyle = '#467599';
+    x.fillText('W O R L D   T H R A S H   T O U R', 512, 214);
+    return new THREE.CanvasTexture(c);
+  },
+
+  buildStage(){
+    const steel = this.steelTexture();
+
+    const floorTex = steel.clone();
+    floorTex.needsUpdate = true;
+    floorTex.repeat.set(16, 16);
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(160, 160),
+      new THREE.MeshStandardMaterial({ map: floorTex, color: 0x090e17, roughness: 0.85, metalness: 0.45 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(0, -7.2, -20);
+    this.scene.add(floor);
+
+    // stage deck
+    const deckTex = steel.clone(); deckTex.needsUpdate = true; deckTex.repeat.set(8, 4);
+    const deck = new THREE.Mesh(
+      new THREE.BoxGeometry(44, 2.4, 26),
+      new THREE.MeshStandardMaterial({ map: deckTex, color: 0x0b1020, roughness: 0.7, metalness: 0.6 })
+    );
+    deck.position.set(0, -3.4, -30);
+    this.scene.add(deck);
+
+    // riser drum platform
+    const riser = new THREE.Mesh(
+      new THREE.CylinderGeometry(5, 5.6, 1.8, 24),
+      new THREE.MeshStandardMaterial({ color: 0x080d17, roughness: 0.6, metalness: 0.7 })
+    );
+    riser.position.set(0, -1.3, -38);
+    this.scene.add(riser);
+  },
+
+  buildTruss(){
+    const mat = new THREE.MeshStandardMaterial({ color: 0x18223a, roughness: 0.35, metalness: 0.95 });
+    const tube = new THREE.CylinderGeometry(0.22, 0.22, 1, 8);
+    const parts = [];
+    const M = new THREE.Matrix4(), E = new THREE.Euler(), S = new THREE.Vector3(), P = new THREE.Vector3();
+    const Q = new THREE.Quaternion();
+
+    const put = (x, y, z, len, rx, rz) => {
+      P.set(x, y, z); E.set(rx || 0, 0, rz || 0); Q.setFromEuler(E); S.set(1, len, 1);
+      parts.push({ geo: tube, matrix: M.clone().compose(P, Q, S) });
+    };
+    const beam = (x, y, z, len, axis) =>
+      put(x, y, z, len, axis === 'z' ? Math.PI / 2 : 0, axis === 'x' ? Math.PI / 2 : 0);
+
+    // two horizontal trusses with zig-zag lacing
+    for(const y of [15.5, 18.2]){
+      for(const z of [-24, -34]){
+        beam(0, y, z, 44, 'x');
+        for(let x = -21; x <= 21; x += 3) put(x, y + 1.35, z, 3.4, 0, (x / 3) % 2 === 0 ? 0.72 : -0.72);
+      }
+      beam(-21, y, -29, 12, 'z');
+      beam(21, y, -29, 12, 'z');
+    }
+    // vertical towers
+    for(const x of [-21, 21]){
+      for(const z of [-24, -34]){
+        beam(x, 6, z, 22, 'y');
+        for(let y = -2; y < 16; y += 3) put(x, y, z, 3.2, 0.7, 0);
+      }
+    }
+    this.truss = new THREE.Mesh(mergeParts(parts), mat);
+    this.scene.add(this.truss);
+  },
+
+  buildAmps(){
+    const steel = this.steelTexture();
+    const grill = steel.clone(); grill.needsUpdate = true; grill.repeat.set(3, 2);
+    const cabMat = new THREE.MeshStandardMaterial({ color: 0x0b1019, map: grill, roughness: 0.9, metalness: 0.25 });
+    const headMat = new THREE.MeshStandardMaterial({ color: 0x1d2740, roughness: 0.3, metalness: 0.9 });
+    const coneMat = new THREE.MeshStandardMaterial({ color: 0x05080e, roughness: 1 });
+    const ledMat = new THREE.MeshBasicMaterial({ color: C_CRIMSON });
+
+    const cabGeo   = new THREE.BoxGeometry(6.2, 4.0, 3.2);
+    const headGeo  = new THREE.BoxGeometry(6.0, 1.5, 3.0);
+    const spkGeo   = new THREE.CylinderGeometry(0.95, 0.95, 0.22, 16);
+    const ledGeo   = new THREE.SphereGeometry(0.13, 8, 6);
+
+    /* every stack is baked into one geometry per material: 4 draw calls for
+       the whole backline instead of ~100 */
+    const cabs = [], spks = [], heads = [], leds = [];
+    const M = new THREE.Matrix4(), L = new THREE.Matrix4();
+    const Q = new THREE.Quaternion(), E = new THREE.Euler();
+    const P = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1);
+    const push = (list, geo, x, y, z, rx, base) => {
+      P.set(x, y, z); E.set(rx || 0, 0, 0); Q.setFromEuler(E);
+      L.compose(P, Q, S);
+      list.push({ geo, matrix: new THREE.Matrix4().multiplyMatrices(base, L) });
+    };
+
+    for(const sx of [-1, 1]){
+      for(let stack = 0; stack < 3; stack++){
+        P.set(sx * (12.6 + stack * 0.5), 0, -16 - stack * 7);
+        E.set(0, -sx * 0.34, 0); Q.setFromEuler(E);
+        const base = M.clone().compose(P, Q, S);
+        for(let k = 0; k < 3; k++){
+          const cy = -2 + k * 4.05;
+          push(cabs, cabGeo, 0, cy, 0, 0, base);
+          for(const dx of [-1.5, 1.5]) for(const dy of [-1, 1])
+            push(spks, spkGeo, dx, cy + dy, 1.65, Math.PI / 2, base);
+        }
+        push(heads, headGeo, 0, 10.5, 0, 0, base);
+        push(leds, ledGeo, 2.4, 10.5, 1.6, 0, base);
+      }
+    }
+    this.scene.add(new THREE.Mesh(mergeParts(cabs), cabMat));
+    this.scene.add(new THREE.Mesh(mergeParts(spks), coneMat));
+    this.scene.add(new THREE.Mesh(mergeParts(heads), headMat));
+    this.scene.add(new THREE.Mesh(mergeParts(leds), ledMat));
+    this.ledMat = ledMat;
+  },
+
+  /* Vertical falloff for the beam cones: hot at the lens, gone by the floor.
+     Under additive blending black contributes nothing, so this is the haze. */
+  beamTexture(){
+    const c = document.createElement('canvas');
+    c.width = 4; c.height = 128;
+    const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 128, 0, 0);      // v=0 is the wide end
+    g.addColorStop(0.00, '#000000');
+    g.addColorStop(0.18, '#2a2a2a');
+    g.addColorStop(0.62, '#9a9a9a');
+    g.addColorStop(1.00, '#ffffff');
+    x.fillStyle = g;
+    x.fillRect(0, 0, 4, 128);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return t;
+  },
+
+  buildSpots(){
+    const H = 26;
+    const geo = new THREE.ConeGeometry(3.6, H, 26, 1, true);
+    const beam = this.beamTexture();
+    for(let i = 0; i < 6; i++){
+      const pivot = new THREE.Object3D();
+      const x = -18 + i * 7.2;
+      pivot.position.set(x, 17.6, i % 2 ? -24 : -34);
+      const mat = new THREE.MeshBasicMaterial({
+        color: i % 2 ? C_CRIMSON : C_STEEL, map: beam,
+        transparent:true, opacity:0.10, blending:THREE.AdditiveBlending,
+        side:THREE.DoubleSide, depthWrite:false
+      });
+      const cone = new THREE.Mesh(geo, mat);
+      cone.position.y = -H / 2;
+      pivot.add(cone);
+
+      // housing
+      const can = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 0.7, 1.5, 10),
+        new THREE.MeshStandardMaterial({ color: 0x141c2e, metalness: 0.9, roughness: 0.35 })
+      );
+      can.position.y = 0.4;
+      pivot.add(can);
+
+      this.scene.add(pivot);
+      this.spots.push({ pivot, mat, cone, phase: i * 1.05, dir: i % 2 ? 1 : -1, baseColor: i % 2 ? C_CRIMSON : C_STEEL });
+
+      if(i < 2){
+        const sl = new THREE.SpotLight(i % 2 ? C_CRIMSON : C_STEEL, 2.2, 90, 0.42, 0.55, 1.4);
+        sl.position.copy(pivot.position);
+        sl.target.position.set(x * 0.3, -4, -18);
+        this.scene.add(sl); this.scene.add(sl.target);
+        this.spotLights.push(sl);
+      }
+    }
+  },
+
+  buildCrowd(){
+    /* Three InstancedMeshes share one transform per person: torso, head and a
+       pair of raised arms. Per-instance colour gives every body its own shirt
+       and skin tone without costing a draw call. */
+    const T = new THREE.Matrix4();
+    const bodyGeo = mergeParts([
+      { geo: new THREE.CylinderGeometry(0.30, 0.40, 1.25, 6, 1), matrix: T.clone().makeTranslation(0, 0.30, 0) }
+    ]);
+    const headGeo = mergeParts([
+      { geo: new THREE.SphereGeometry(0.27, 7, 5), matrix: T.clone().makeTranslation(0, 1.16, 0) }
+    ]);
+    const armGeo = mergeParts([
+      { geo: new THREE.CylinderGeometry(0.062, 0.055, 0.78, 5),
+        matrix: T.clone().compose(new THREE.Vector3(-0.30, 1.22, 0),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0,  0.22)), new THREE.Vector3(1, 1, 1)) },
+      { geo: new THREE.CylinderGeometry(0.062, 0.055, 0.78, 5),
+        matrix: T.clone().compose(new THREE.Vector3(0.30, 1.22, 0),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -0.22)), new THREE.Vector3(1, 1, 1)) }
+    ]);
+    const skinMat = () => new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8, metalness: 0.02 });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0.05 });
+
+    this.crowd = new THREE.InstancedMesh(bodyGeo, mat, CROWD);
+    this.crowdHeads = new THREE.InstancedMesh(headGeo, skinMat(), CROWD);
+    this.crowdArms = new THREE.InstancedMesh(armGeo, skinMat(), CROWD);
+    for(const m of [this.crowd, this.crowdHeads, this.crowdArms]) m.frustumCulled = false;
+    this.crowdArr = this.crowd.instanceMatrix.array;
+    this.crowdHeadArr = this.crowdHeads.instanceMatrix.array;
+    this.crowdArmArr = this.crowdArms.instanceMatrix.array;
+
+    /* Gig-crowd wardrobe. Kept very dark on purpose: under stage light a
+       real pit reads as silhouettes with a hint of colour, and pale skin at
+       this instance count turns the room into a mannequin warehouse. */
+    const SHIRTS = [0x030407, 0x040509, 0x070605, 0x030508, 0x080405, 0x050507,
+                    0x0d0402, 0x03080e, 0x020304, 0x080604];
+    const SKINS  = [0x100c08, 0x0d0906, 0x090604, 0x14100c, 0x0b0806];
+    const col = new THREE.Color();
+
+    this.crowdX = new Float32Array(CROWD);
+    this.crowdZ = new Float32Array(CROWD);
+    this.crowdPhase = new Float32Array(CROWD);
+    this.crowdScale = new Float32Array(CROWD);
+    this.crowdYawC = new Float32Array(CROWD);
+    this.crowdYawS = new Float32Array(CROWD);
+    this.crowdArmUp = new Uint8Array(CROWD);
+
+    for(let i = 0; i < CROWD; i++){
+      const row = Math.floor(i / 40);
+      const yaw = (Math.random() - 0.5) * 0.9;
+      this.crowdX[i] = (Math.random() - 0.5) * (26 + row * 1.7);
+      this.crowdZ[i] = -12 + row * 0.92 + Math.random() * 0.7;
+      this.crowdPhase[i] = Math.random() * Math.PI * 2;
+      this.crowdScale[i] = 0.85 + Math.random() * 0.35;
+      this.crowdYawC[i] = Math.cos(yaw);
+      this.crowdYawS[i] = Math.sin(yaw);
+      this.crowdArmUp[i] = Math.random() < 0.34 ? 1 : 0;
+      this.crowd.setColorAt(i, col.setHex(SHIRTS[(Math.random() * SHIRTS.length) | 0]));
+      const sk = col.setHex(SKINS[(Math.random() * SKINS.length) | 0]);
+      this.crowdHeads.setColorAt(i, sk);
+      this.crowdArms.setColorAt(i, sk);
+    }
+    this.crowd.instanceColor.needsUpdate = true;
+    this.crowdHeads.instanceColor.needsUpdate = true;
+    this.crowdArms.instanceColor.needsUpdate = true;
+    this.scene.add(this.crowd);
+    this.scene.add(this.crowdHeads);
+    this.scene.add(this.crowdArms);
+    this.crowdBaseY = -6.4;
+  },
+
+  buildBanner(){
+    const tex = this.bannerTexture();
+    const b = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 7.5),
+      new THREE.MeshBasicMaterial({ map: tex, transparent: false })
+    );
+    b.position.set(0, 11.5, -48);
+    this.scene.add(b);
+    this.banner = b;
+
+    // side scrims
+    for(const sx of [-1, 1]){
+      const s = new THREE.Mesh(
+        new THREE.PlaneGeometry(10, 22),
+        new THREE.MeshStandardMaterial({ color: 0x0a0f1a, roughness: 1, side: THREE.DoubleSide })
+      );
+      s.position.set(sx * 24, 8, -44);
+      s.rotation.y = -sx * 0.5;
+      this.scene.add(s);
+    }
+  },
+
+
+  /* --- soft cloud sheet used for the haze layers --- */
+  hazeTexture(){
+    const c = document.createElement('canvas');
+    c.width = c.height = 128;
+    const x = c.getContext('2d');
+    x.fillStyle = '#000';
+    x.fillRect(0, 0, 128, 128);
+    for(let i = 0; i < 26; i++){
+      const px = Math.random() * 128, py = Math.random() * 128;
+      const r = 14 + Math.random() * 34;
+      const g = x.createRadialGradient(px, py, 0, px, py, r);
+      const a = 0.05 + Math.random() * 0.10;
+      g.addColorStop(0, 'rgba(104,128,164,' + a.toFixed(3) + ')');
+      g.addColorStop(1, 'rgba(104,128,164,0)');
+      x.fillStyle = g;
+      x.fillRect(px - r, py - r, r * 2, r * 2);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    return t;
+  },
+
+  /* Layered haze. The beam cones supply the shafts; these sheets give the
+     air between them something to hang in. */
+  buildHaze(){
+    const tex = this.hazeTexture();
+    this.haze = [];
+    const spec = [[-16, 3.0, 96, 30], [-27, 5.0, 108, 34], [-38, 6.5, 116, 38]];
+    for(let i = 0; i < spec.length; i++){
+      const [z, y, w, h] = spec[i];
+      const t = tex.clone();
+      t.needsUpdate = true;
+      t.repeat.set(2.2, 1);
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(w, h),
+        new THREE.MeshBasicMaterial({
+          map: t, transparent: true, opacity: 0.012,
+          blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+        })
+      );
+      m.position.set(0, y, z);
+      m.renderOrder = 2;
+      this.scene.add(m);
+      this.haze.push({ mesh: m, tex: t, drift: 0.006 + i * 0.004, base: 0.009 + i * 0.004 });
+    }
+  },
+
+  /* Audience blinders: the row of warm lamps that fires straight into the
+     crowd. Dark until the multiplier maxes out or a big hit lands. */
+  buildBlinders(){
+    const geo = new THREE.PlaneGeometry(1.5, 1.5);
+    const parts = [];
+    const M = new THREE.Matrix4();
+    for(const sx of [-1, 1]){
+      for(let col = 0; col < 4; col++){
+        for(let row = 0; row < 2; row++){
+          parts.push({ geo, matrix: M.clone().makeTranslation(
+            sx * (7.0 + col * 1.7), 14.2 + row * 1.7, -21.6) });
+        }
+      }
+    }
+    this.blindMat = new THREE.MeshBasicMaterial({
+      color: 0xffe2b0, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const m = new THREE.Mesh(mergeParts(parts), this.blindMat);
+    m.renderOrder = 3;
+    this.scene.add(m);
+
+    this.blindLight = new THREE.PointLight(0xffe2b0, 0, 80, 1.6);
+    this.blindLight.position.set(0, 13, -18);
+    this.scene.add(this.blindLight);
+  },
+
+  /* --- LED backdrop, redrawn from the live 5-band envelope --- */
+  buildLedWall(){
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 72;
+    this.ledCanvas = c;
+    this.ledCtx = c.getContext('2d');
+    this.ledTex = new THREE.CanvasTexture(c);
+    this.ledTick = 0;
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(26, 7.4),
+      new THREE.MeshBasicMaterial({ map: this.ledTex })
+    );
+    wall.position.set(0, 5.2, -46);
+    this.scene.add(wall);
+
+    // black bezel so the panel reads as a fixture, not a floating rectangle
+    const frame = new THREE.Mesh(
+      new THREE.PlaneGeometry(27.4, 8.8),
+      new THREE.MeshStandardMaterial({ color: 0x04060a, roughness: 0.9 })
+    );
+    frame.position.set(0, 5.2, -46.3);
+    this.scene.add(frame);
+    this.paintLed();
+  },
+
+  paintLed(){
+    const x = this.ledCtx, W = 256, H = 72;
+    x.fillStyle = '#05070c';
+    x.fillRect(0, 0, W, H);
+    const bw = W / 5;
+    for(let i = 0; i < 5; i++){
+      const lvl = Math.min(1, G.bands[i]);
+      const hex = '#' + LANE_COLORS[i].toString(16).padStart(6, '0');
+      // stacked cells, lit from the bottom up
+      for(let cell = 0; cell < 12; cell++){
+        const on = lvl > (cell + 0.5) / 12;
+        x.fillStyle = on ? hex : '#0b1018';
+        x.globalAlpha = on ? 1 : 0.55;
+        x.fillRect(i * bw + 3, H - 6 - cell * 5.4, bw - 6, 4.2);
+      }
+    }
+    x.globalAlpha = 1;
+    x.fillStyle = 'rgba(0,0,0,0.35)';
+    for(let y = 0; y < H; y += 3) x.fillRect(0, y, W, 1);
+    this.ledTex.needsUpdate = true;
+  },
+
+  /* Crowd barrier and the security gap behind it. Sells the scale of the
+     pit far better than more bodies would. */
+  buildBarricade(){
+    const rails = [], panels = [];
+    const M = new THREE.Matrix4(), Q = new THREE.Quaternion();
+    const P = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1);
+    const rail = new THREE.CylinderGeometry(0.07, 0.07, 1, 8);
+    const panel = new THREE.BoxGeometry(2.2, 1.0, 0.06);
+    const post = new THREE.CylinderGeometry(0.06, 0.06, 1.35, 6);
+    const put = (list, geo, px, py, pz, rz, sy) => {
+      P.set(px, py, pz);
+      Q.setFromEuler(new THREE.Euler(0, 0, rz || 0));
+      S.set(1, sy === undefined ? 1 : sy, 1);
+      list.push({ geo, matrix: M.clone().compose(P, Q, S) });
+    };
+    const y0 = -6.4, z = -14.0;
+    for(let sx = -10; sx <= 10; sx++){
+      const px = sx * 2.3;
+      put(rails, post, px, y0 + 0.68, z);
+      put(panels, panel, px + 1.15, y0 + 0.60, z);
+    }
+    put(rails, rail, 0, y0 + 1.36, z, Math.PI / 2, 48);   // top rail
+    put(rails, rail, 0, y0 + 0.70, z, Math.PI / 2, 48);   // mid rail
+    this.scene.add(new THREE.Mesh(mergeParts(rails),
+      new THREE.MeshStandardMaterial({ color: 0x2b3138, roughness: 0.35, metalness: 0.9 })));
+    this.scene.add(new THREE.Mesh(mergeParts(panels),
+      new THREE.MeshStandardMaterial({ color: 0x070a10, roughness: 0.8, metalness: 0.3 })));
+  },
+
+  /* Road cases against the backline and two hanging PA arrays. */
+  buildProps(){
+    const cases = [], hangs = [];
+    const M = new THREE.Matrix4();
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    const put = (list, x, y, z, w, h, d, ry) => {
+      const P = new THREE.Vector3(x, y, z);
+      const Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, ry || 0, 0));
+      list.push({ geo: box, matrix: M.clone().compose(P, Q, new THREE.Vector3(w, h, d)) });
+    };
+    for(const sx of [-1, 1]){
+      put(cases, sx * 7.4, -1.65, -40.5, 2.4, 1.1, 1.4, sx * 0.18);
+      put(cases, sx * 9.6, -1.65, -41.2, 1.8, 1.1, 1.2, sx * 0.34);
+      put(cases, sx * 8.2, -0.55, -40.5, 2.0, 1.1, 1.2, sx * 0.10);
+    }
+    // line-array cabinets hung inboard of the truss towers
+    for(const sx of [-1, 1]){
+      for(let k = 0; k < 6; k++)
+        put(hangs, sx * 16.5, 13.4 - k * 1.16, -20.5, 2.5, 1.0, 1.7, -sx * 0.12);
+    }
+    this.scene.add(new THREE.Mesh(mergeParts(cases),
+      new THREE.MeshStandardMaterial({ color: 0x090c12, roughness: 0.65, metalness: 0.35 })));
+    this.scene.add(new THREE.Mesh(mergeParts(hangs),
+      new THREE.MeshStandardMaterial({ color: 0x070910, roughness: 0.7, metalness: 0.4 })));
+  },
+
+  /* Phone screens in the pit: one additive Points cloud, twinkling. */
+  buildPhones(){
+    const N = Q.phones;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    this.phonePhase = new Float32Array(N);
+    this.phoneBase = new Float32Array(N * 3);
+    for(let i = 0; i < N; i++){
+      const o = i * 3;
+      /* 60% in the pit, 40% out in the far field — from the stage the phone
+         sea is the shot, and it has to reach past the barricade rows */
+      if(Festival.farX.length === 0 || Math.random() < 0.42){
+        const j = (Math.random() * CROWD) | 0;
+        pos[o]     = this.crowdX[j] + (Math.random() - 0.5) * 0.5;
+        pos[o + 1] = this.crowdBaseY + 1.75 + Math.random() * 0.5;
+        pos[o + 2] = this.crowdZ[j];
+      } else {
+        const j = (Math.random() * Festival.farX.length) | 0;
+        pos[o]     = Festival.farX[j] + (Math.random() - 0.5) * 0.5;
+        pos[o + 1] = this.crowdBaseY + 1.75 + Math.random() * 0.5;
+        pos[o + 2] = Festival.farZ[j];
+      }
+      /* sizeAttenuation shrinks a 0.26-unit point to ~1 px at 90 units, and
+         the sprite is a soft gradient, so a far phone contributes almost no
+         coverage. Pay it back in brightness — additive blending turns the
+         far field into a glow instead of nothing. */
+      const gain = pos[o + 2] > 17 ? 2.4 : 1.0;
+      this.phoneBase[o] = (0.62 + Math.random() * 0.38) * gain;
+      this.phoneBase[o + 1] = (0.70 + Math.random() * 0.30) * gain;
+      this.phoneBase[o + 2] = 1.0 * gain;
+      this.phonePhase[i] = Math.random() * Math.PI * 2;
+      col[o] = col[o + 1] = col[o + 2] = 0;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    this.phoneCol = col;
+    this.phones = new THREE.Points(g, new THREE.PointsMaterial({
+      size: 0.26, sizeAttenuation: true, vertexColors: true,
+      map: Highway.initTextures(), transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    this.phones.frustumCulled = false;
+    this.scene.add(this.phones);
+  },
+
+  /* One Points system for both pyro jets and the end-of-song confetti. */
+  buildFx(){
+    const N = 700;
+    this.fxN = N;
+    this.fxPos  = new Float32Array(N * 3);
+    this.fxCol  = new Float32Array(N * 3);
+    this.fxVel  = new Float32Array(N * 3);
+    this.fxLife = new Float32Array(N);
+    this.fxBase = new Float32Array(N * 3);
+    this.fxDrag = new Float32Array(N);
+    for(let i = 0; i < N; i++) this.fxPos[i * 3 + 1] = -9999;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.fxPos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.fxCol, 3));
+    this.fx = new THREE.Points(g, new THREE.PointsMaterial({
+      size: 0.42, sizeAttenuation: true, vertexColors: true,
+      map: Highway.initTextures(), transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    this.fx.frustumCulled = false;
+    this.scene.add(this.fx);
+    this.fxAlive = 0;
+  },
+
+  fxSpawn(count, x, y, z, spread, up, life, r, g, b, drag){
+    for(let i = 0; i < this.fxN && count > 0; i++){
+      if(this.fxLife[i] > 0) continue;
+      const o = i * 3;
+      this.fxLife[i] = life * (0.7 + Math.random() * 0.6);
+      this.fxDrag[i] = drag;
+      this.fxPos[o]     = x + (Math.random() - 0.5) * spread;
+      this.fxPos[o + 1] = y;
+      this.fxPos[o + 2] = z + (Math.random() - 0.5) * spread;
+      this.fxVel[o]     = (Math.random() - 0.5) * spread * 2.2;
+      this.fxVel[o + 1] = up * (0.6 + Math.random() * 0.7);
+      this.fxVel[o + 2] = (Math.random() - 0.5) * spread * 2.2;
+      this.fxBase[o] = r; this.fxBase[o + 1] = g; this.fxBase[o + 2] = b;
+      count--;
+    }
+    this.fxAlive = 1;
+  },
+
+  /** Two flame jets at the stage lip. */
+  pyro(){
+    for(const sx of [-1, 1])
+      this.fxSpawn(70, sx * 9.5, -2.2, -18.5, 0.5, 17, 1.0, 1.0, 0.42, 0.08, 1.1);
+  },
+
+  confetti(){
+    for(let k = 0; k < 6; k++){
+      const c = LANE_COLORS[k % 5];
+      this.fxSpawn(90, (Math.random() - 0.5) * 26, 15, -24 + Math.random() * 10,
+        6, 3, 4.2, ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255, 0.35);
+    }
+  },
+
+  updateFx(dt){
+    if(!this.fxAlive) return;
+    let alive = 0;
+    const P = this.fxPos, V = this.fxVel, C = this.fxCol, B = this.fxBase, L = this.fxLife, D = this.fxDrag;
+    for(let i = 0; i < this.fxN; i++){
+      if(L[i] <= 0) continue;
+      const o = i * 3;
+      L[i] -= dt;
+      if(L[i] <= 0){
+        L[i] = 0; P[o + 1] = -9999;
+        C[o] = C[o + 1] = C[o + 2] = 0;
+        continue;
+      }
+      alive++;
+      const drag = 1 - D[i] * dt;
+      V[o] *= drag; V[o + 2] *= drag;
+      V[o + 1] = V[o + 1] * drag - 9.0 * dt;
+      P[o]     += V[o] * dt;
+      P[o + 1] += V[o + 1] * dt;
+      P[o + 2] += V[o + 2] * dt;
+      const f = Math.min(1, L[i] * 1.6);
+      C[o] = B[o] * f; C[o + 1] = B[o + 1] * f; C[o + 2] = B[o + 2] * f;
+    }
+    this.fx.geometry.attributes.position.needsUpdate = true;
+    this.fx.geometry.attributes.color.needsUpdate = true;
+    if(!alive) this.fxAlive = 0;
+  },
+
+  update(t, dt){
+    const bass = G.bassLevel, mid = G.midLevel;
+
+    /* spotlights: swing + colour alternate + white strobe on bass spikes */
+    for(let i = 0; i < this.spots.length; i++){
+      const s = this.spots[i];
+      s.pivot.rotation.z = Math.sin(t * 0.55 + s.phase) * 0.55 * s.dir;
+      s.pivot.rotation.x = 0.42 + Math.sin(t * 0.37 + s.phase * 1.7) * 0.26;
+      let beat = 0.055 + bass * 0.115 + Math.abs(Math.sin(t * 2.1 + s.phase)) * 0.03;
+      /* fade a beam out as the camera walks into it, or it fills the frame
+         with one flat additive polygon */
+      const d = this.cine.position.distanceTo(s.pivot.position);
+      if(d < 22) beat *= Math.max(0, (d - 5) / 17);
+      s.mat.opacity = beat;
+      if(G.strobe > 0.5){
+        s.mat.color.setHex(C_BONE);
+      } else {
+        s.mat.color.setHex(s.baseColor);
+      }
+    }
+    for(let i = 0; i < this.spotLights.length; i++){
+      const sl = this.spotLights[i];
+      sl.intensity = 0.7 + bass * 1.6;
+      sl.target.position.x = Math.sin(t * 0.6 + i * 2) * 14;
+      sl.target.position.z = -18 + Math.cos(t * 0.4 + i) * 8;
+    }
+    this.strobeLight.intensity = G.strobe * 4.5;
+    this.rimLight.intensity = 0.6 + bass * 1.7;
+    this.ledMat.color.setHex(G.strobe > 0.5 ? C_BONE : C_CRIMSON);
+
+    /* --- haze drift --- */
+    for(let i = 0; i < this.haze.length; i++){
+      const hz = this.haze[i];
+      hz.tex.offset.x = (hz.tex.offset.x + hz.drift * dt) % 1;
+      hz.mesh.material.opacity = hz.base * (0.7 + bass * 0.9);
+    }
+
+    /* --- blinders: full tilt at 4x, a stab on every big hit --- */
+    const wantBlind = (G.state === 'play' && G.mult >= 4 ? 0.55 : 0) + G.strobe * 0.45;
+    G.blind += (wantBlind - G.blind) * Math.min(1, dt * 9);
+    this.blindMat.opacity = G.blind * 0.85;
+    this.blindLight.intensity = G.blind * 3.2;
+
+    /* --- LED wall, repainted at ~15 Hz --- */
+    if((++this.ledTick & 3) === 0) this.paintLed();
+
+    /* --- phone screens twinkle --- */
+    const PC = this.phoneCol, PB = this.phoneBase;
+    for(let i = 0; i < this.phonePhase.length; i++){
+      const o = i * 3;
+      const f = 0.35 + 0.65 * Math.max(0, Math.sin(t * 0.9 + this.phonePhase[i]));
+      PC[o] = PB[o] * f; PC[o + 1] = PB[o + 1] * f; PC[o + 2] = PB[o + 2] * f;
+    }
+    this.phones.geometry.attributes.color.needsUpdate = true;
+
+    this.updateFx(dt);
+
+    /* Crowd: jump on bass, headbang on mids. Matrices go straight into the
+       instance buffer — Object3D.updateMatrix() per body, twice per person,
+       was the most expensive thing in the frame. */
+    const A = this.crowdArr, H = this.crowdHeadArr, R = this.crowdArmArr;
+    const jumpAmp = 0.35 + bass * 1.5;
+    /* the pit presses toward the barrier as the streak climbs */
+    const surge = -Math.min(1, G.combo / 40) * 1.5;
+    const bangAmp = 0.30 + mid * 0.75;
+    for(let i = 0; i < CROWD; i++){
+      const ph = this.crowdPhase[i];
+      const jump = Math.max(0, Math.sin(t * 6.2 + ph * 0.7)) * jumpAmp;
+      const bang = Math.sin(t * 9.4 + ph) * bangAmp * 0.45;
+      const s = this.crowdScale[i];
+      const cy = this.crowdYawC[i], sy = this.crowdYawS[i];
+      const cb = Math.cos(bang), sb = Math.sin(bang);
+      const o = i * 16;
+      // M = T(x,y,z) * Ry(yaw) * Rx(bang) * S(s), column-major
+      A[o     ] = cy * s;      A[o +  1] = 0;       A[o +  2] = -sy * s;     A[o +  3] = 0;
+      A[o +  4] = sy * sb * s; A[o +  5] = cb * s;  A[o +  6] = cy * sb * s; A[o +  7] = 0;
+      A[o +  8] = sy * cb * s; A[o +  9] = -sb * s; A[o + 10] = cy * cb * s; A[o + 11] = 0;
+      A[o + 12] = this.crowdX[i];
+      A[o + 13] = this.crowdBaseY + jump;
+      A[o + 14] = this.crowdZ[i] + surge;
+      A[o + 15] = 1;
+      /* heads reuse the body transform; arms too, collapsed to nothing for
+         the two-thirds of the crowd that is not throwing horns */
+      const up = this.crowdArmUp[i];
+      for(let k = 0; k < 16; k++){
+        const val = A[o + k];
+        H[o + k] = val;
+        R[o + k] = up ? val : (k === 15 ? 1 : 0);
+      }
+    }
+    this.crowd.instanceMatrix.needsUpdate = true;
+    this.crowdHeads.instanceMatrix.needsUpdate = true;
+    this.crowdArms.instanceMatrix.needsUpdate = true;
+
+    Band.update(t);
+    Festival.update(t, dt);
+    Director.update(dt);
+
+    /* the play camera only breathes — a moving highway is an unreadable one */
+    const bob = (G.state === 'play' ? bass : 0.15) * 0.035;
+    this.playCam.position.x = Math.sin(t * 11) * bob;
+    this.playCam.position.y = 4.6 + Math.cos(t * 13) * bob;
+    this.playCam.lookAt(0, 5.4, -8);
+    this.playRim.intensity = 0.9 + bass * 2.2;
+    if(Post.on)
+      Post.comp.uniforms.strength.value =
+        0.52 + bass * 0.30 + (G.mult >= 4 ? 0.34 : 0) + G.strobe * 0.20;
+  },
+
+  render(){
+    const r = this.renderer;
+    /* both passes go into one target so the bloom sees the beams, the LED
+       wall and the note gems together */
+    r.setRenderTarget(Post.on ? Post.rt : null);
+    r.clear();
+    r.render(this.scene, this.cine);        // venue: roaming camera
+    r.clearDepth();
+    r.render(this.play, this.playCam);      // highway: locked camera, on top
+    if(Post.on) Post.run(r);
+    r.setRenderTarget(null);
+  }
+};
+
+/* ==========================================================================
+   MODULE: Festival — sky, skyline, far crowd, totems
+   Everything that turns the venue from a room into an outdoor festival.
+   Owns only objects it creates; the stage, truss and band belong to World.
+   ========================================================================== */
+/* Far-field width at depth z. The near crowd's own law is
+   width = 26 + 1.7 * row where row = (z + 12) / 0.92, which reaches ~81 at
+   z = 18. Starting the far wedge any narrower pinches the crowd to an
+   hourglass exactly at the seam, which is what a hard-coded 34 did. */
+const FAR_W = z => 81 + (z - 18) * 1.9;
+
+const Festival = {
+  ready:false,
+  skyMat:null, stars:null, starPhase:null, starCol:null,
+  wheel:null, wheelCol:null, wheelBase:null,
+  farCrowd:null, farArr:null, farPhase:null, farTick:0, farX:null, farZ:null,
+  farHeads:null, farHeadArr:null, farY:null,
+  totems:null, totemArr:null, totemX:null, totemY:null,
+  totemZ:null, totemPhase:null, totemScale:null,
+  glows:[], towerLamps:null, towerCol:null,
+
+  init(scene){
+    this.buildSky(scene);
+    this.buildWheel(scene);
+    this.buildSkyline(scene);
+    this.buildFarCrowd(scene);
+    this.buildTotems(scene);
+    this.ready = true;
+  },
+
+  /* One inverted sphere. Outputs LINEAR colour with no encodings_fragment:
+     the venue renders into Post.rt, and Post.comp does the single sRGB
+     conversion for the whole frame. */
+  buildSky(scene){
+    this.skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide, depthWrite:false, fog:false,
+      uniforms: {
+        uZenith:  { value: new THREE.Color(C_ZENITH) },
+        uDusk:    { value: new THREE.Color(C_DUSK) },
+        uHorizon: { value: new THREE.Color(C_HORIZON) },
+        uGlow:    { value: 1.0 }
+      },
+      vertexShader: [
+        'varying vec3 vDir;',
+        'void main(){',
+        '  vDir = normalize(position);',
+        '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform vec3 uZenith, uDusk, uHorizon;',
+        'uniform float uGlow;',
+        'varying vec3 vDir;',
+        'void main(){',
+        '  float h = clamp(vDir.y * 0.5 + 0.5, 0.0, 1.0);',
+        '  vec3 c = mix(uHorizon, uDusk, smoothstep(0.50, 0.66, h));',
+        '  c = mix(c, uZenith, smoothstep(0.62, 0.95, h));',
+        '  float lobe = max(0.0, -vDir.z) * pow(max(0.0, 1.0 - abs(vDir.y) * 2.2), 3.0);',
+        '  c += uHorizon * lobe * 1.9 * uGlow;',
+        '  gl_FragColor = vec4(c, 1.0);',
+        '}'
+      ].join('\n')
+    });
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 32, 20), this.skyMat);
+    sky.renderOrder = -1;
+    sky.frustumCulled = false;
+    scene.add(sky);
+
+    /* stars: upper hemisphere only, on the shared spark sprite */
+    const N = Q.stars;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    this.starPhase = new Float32Array(N);
+    for(let i = 0; i < N; i++){
+      const o = i * 3;
+      const u = Math.random() * Math.PI * 2;
+      const v = Math.random() * 0.85 + 0.06;      // keep them off the horizon
+      const r = 270;
+      const sy = Math.sin(v * Math.PI * 0.5);
+      const sr = Math.cos(v * Math.PI * 0.5);
+      pos[o]     = Math.cos(u) * sr * r;
+      pos[o + 1] = sy * r;
+      pos[o + 2] = Math.sin(u) * sr * r;
+      this.starPhase[i] = Math.random() * Math.PI * 2;
+      col[o] = col[o + 1] = col[o + 2] = 0.35 + Math.random() * 0.45;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    this.starCol = col;
+    this.stars = new THREE.Points(g, new THREE.PointsMaterial({
+      size: 2.2, sizeAttenuation: true, vertexColors: true,
+      map: Highway.initTextures(), transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    this.stars.frustumCulled = false;
+    this.stars.renderOrder = 0;
+    scene.add(this.stars);
+  },
+
+  /* Off-axis on purpose: centred it reads as a logo, off-axis as a place.
+     Near-black under fog, so it is a silhouette with lamps on it. */
+  buildWheel(scene){
+    const R = 22, SPOKES = 24;
+    const parts = [];
+    const M = new THREE.Matrix4(), E = new THREE.Euler(), Qt = new THREE.Quaternion();
+    const P = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1);
+    const put = (geo, x, y, z, rz, sy) => {
+      P.set(x, y, z); E.set(0, 0, rz || 0); Qt.setFromEuler(E);
+      S.set(1, sy === undefined ? 1 : sy, 1);
+      parts.push({ geo, matrix: M.clone().compose(P, Qt, S) });
+    };
+
+    const spoke = new THREE.CylinderGeometry(0.16, 0.16, 1, 5);
+    const gond  = new THREE.BoxGeometry(1.5, 1.6, 1.2);
+    const hub   = new THREE.CylinderGeometry(1.5, 1.5, 1.6, 10);
+    const rimSeg = new THREE.CylinderGeometry(0.18, 0.18, 1, 5);
+
+    put(hub, 0, 0, 0, Math.PI / 2, 1.6);
+
+    for(let i = 0; i < SPOKES; i++){
+      const a = (i / SPOKES) * Math.PI * 2;
+      /* spoke: centred halfway out, rotated to point at the rim */
+      put(spoke, Math.cos(a) * R * 0.5, Math.sin(a) * R * 0.5, 0, a - Math.PI / 2, R);
+      put(gond,  Math.cos(a) * R,       Math.sin(a) * R,       0, 0, 1);
+      /* rim chord between this spoke tip and the next */
+      const a2 = ((i + 1) / SPOKES) * Math.PI * 2;
+      const mx = (Math.cos(a) + Math.cos(a2)) * 0.5 * R;
+      const my = (Math.sin(a) + Math.sin(a2)) * 0.5 * R;
+      const len = Math.hypot(Math.cos(a2) - Math.cos(a), Math.sin(a2) - Math.sin(a)) * R;
+      put(rimSeg, mx, my, 0, Math.atan2(my, mx), len);
+    }
+
+    this.wheel = new THREE.Group();
+    this.wheel.position.set(42, 8, 95);
+    const frame = new THREE.Mesh(mergeParts(parts),
+      new THREE.MeshBasicMaterial({ color: 0x05070c }));
+    frame.frustumCulled = false;
+    this.wheel.add(frame);
+
+    /* lamps: one per gondola plus two per rim chord */
+    const N = SPOKES * 3;
+    const pos = new Float32Array(N * 3);
+    const col = new Float32Array(N * 3);
+    this.wheelBase = new Float32Array(N);
+    let k = 0;
+    for(let i = 0; i < SPOKES; i++){
+      const a = (i / SPOKES) * Math.PI * 2;
+      const a2 = ((i + 0.33) / SPOKES) * Math.PI * 2;
+      const a3 = ((i + 0.66) / SPOKES) * Math.PI * 2;
+      for(const ang of [a, a2, a3]){
+        const o = k * 3;
+        pos[o] = Math.cos(ang) * R; pos[o + 1] = Math.sin(ang) * R; pos[o + 2] = 0.8;
+        this.wheelBase[k] = k / N;
+        k++;
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    this.wheelCol = col;
+    const lamps = new THREE.Points(g, new THREE.PointsMaterial({
+      size: 2.6, sizeAttenuation: true, vertexColors: true,
+      map: Highway.initTextures(), transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    lamps.frustumCulled = false;
+    this.wheel.add(lamps);
+    scene.add(this.wheel);
+  },
+
+  /* Palms, the glow of a stage happening elsewhere, and four light masts.
+     All silhouette work: near-black basic material, fog does the depth. */
+  buildSkyline(scene){
+    const M = new THREE.Matrix4(), E = new THREE.Euler(), Qt = new THREE.Quaternion();
+    const P = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1);
+
+    /* --- one palm, merged: trunk + 7 fronds --- */
+    const parts = [];
+    const trunk = new THREE.CylinderGeometry(0.28, 0.55, 11, 6);
+    P.set(0, 5.5, 0); E.set(0, 0, 0.06); Qt.setFromEuler(E); S.set(1, 1, 1);
+    parts.push({ geo: trunk, matrix: M.clone().compose(P, Qt, S) });
+    const frond = new THREE.ConeGeometry(0.7, 5.2, 4);
+    for(let i = 0; i < 7; i++){
+      const a = (i / 7) * Math.PI * 2;
+      P.set(Math.cos(a) * 1.9, 11.6, Math.sin(a) * 1.9);
+      E.set(Math.sin(a) * 1.05, -a, Math.cos(a) * 1.05 + Math.PI);
+      Qt.setFromEuler(E); S.set(1, 1, 0.28);
+      parts.push({ geo: frond, matrix: M.clone().compose(P, Qt, S) });
+    }
+    const palmGeo = mergeParts(parts);
+
+    const palms = new THREE.InstancedMesh(palmGeo,
+      new THREE.MeshBasicMaterial({ color: 0x04060a }), Q.palms);
+    palms.frustumCulled = false;
+    const half = Q.palms >> 1;
+    for(let i = 0; i < Q.palms; i++){
+      let x, z;
+      if(i < half){
+        /* field: scattered behind and beside the crowd */
+        z = 30 + Math.random() * 70;
+        x = (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 60);
+      } else {
+        /* flanking: beyond the stage, visible past the truss towers in
+           every existing shot */
+        z = -55 - Math.random() * 30;
+        x = (Math.random() < 0.5 ? -1 : 1) * (44 + Math.random() * 12);
+      }
+      P.set(x, -7.2, z);
+      E.set(0, Math.random() * Math.PI * 2, 0);
+      Qt.setFromEuler(E);
+      const s = 0.8 + Math.random() * 0.6;
+      S.set(s, s, s);
+      palms.setMatrixAt(i, M.clone().compose(P, Qt, S));
+    }
+    palms.instanceMatrix.needsUpdate = true;
+    scene.add(palms);
+
+    /* --- the glow of another stage, off in the field --- */
+    this.glows = [];
+    if(Q.glows){
+      const spec = [[-70, 0xff6a2a, 0.9], [70, 0x2a7aff, 1.4]];
+      for(const [x, hex, speed] of spec){
+        const m = new THREE.Mesh(
+          new THREE.PlaneGeometry(46, 26),
+          new THREE.MeshBasicMaterial({
+            color: hex, transparent: true, opacity: 0.05,
+            map: Highway.initTextures(),
+            blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+          })
+        );
+        m.position.set(x, 2, 70);
+        m.renderOrder = 1;
+        m.frustumCulled = false;
+        scene.add(m);
+        this.glows.push({ mesh: m, phase: Math.random() * 6.28, speed });
+      }
+    }
+
+    /* --- four light masts with blinking aircraft lamps --- */
+    const mastParts = [];
+    const mast = new THREE.CylinderGeometry(0.22, 0.34, 30, 5);
+    const lampPos = new Float32Array(4 * 3);
+    const lampCol = new Float32Array(4 * 3);
+    const spots = [[-58, 55], [58, 62], [-34, 88], [36, 78]];
+    for(let i = 0; i < 4; i++){
+      const [x, z] = spots[i];
+      P.set(x, 7.8, z); E.set(0, 0, 0); Qt.setFromEuler(E); S.set(1, 1, 1);
+      mastParts.push({ geo: mast, matrix: M.clone().compose(P, Qt, S) });
+      const o = i * 3;
+      lampPos[o] = x; lampPos[o + 1] = 22.8; lampPos[o + 2] = z;
+    }
+    const masts = new THREE.Mesh(mergeParts(mastParts),
+      new THREE.MeshBasicMaterial({ color: 0x04060a }));
+    masts.frustumCulled = false;
+    scene.add(masts);
+
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.BufferAttribute(lampPos, 3));
+    lg.setAttribute('color', new THREE.BufferAttribute(lampCol, 3));
+    this.towerCol = lampCol;
+    this.towerLamps = new THREE.Points(lg, new THREE.PointsMaterial({
+      size: 2.0, sizeAttenuation: true, vertexColors: true,
+      map: Highway.initTextures(), transparent: true,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    this.towerLamps.frustumCulled = false;
+    scene.add(this.towerLamps);
+  },
+
+  update(t, dt){
+    if(!this.ready) return;
+    const bass = G.bassLevel;
+
+    /* horizon breathes with the kick. ±8% — more reads as a strobe. */
+    this.skyMat.uniforms.uGlow.value = 1.0 + bass * 0.08;
+
+    /* stars twinkle, repainted at a low rate to keep the buffer upload cheap */
+    const sc = this.starCol;
+    for(let i = 0; i < this.starPhase.length; i++){
+      const o = i * 3;
+      const v = 0.35 + Math.abs(Math.sin(t * 0.6 + this.starPhase[i])) * 0.45;
+      sc[o] = sc[o + 1] = sc[o + 2] = v;
+    }
+    this.stars.geometry.attributes.color.needsUpdate = true;
+
+    /* wheel: slow turn, warm amber lamps chasing round the rim */
+    this.wheel.rotation.z += dt * 0.05;
+    const wc = this.wheelCol, wb = this.wheelBase;
+    const chase = Q.wheelChase ? (t * 0.28) % 1 : 0;
+    for(let i = 0; i < wb.length; i++){
+      const o = i * 3;
+      let d = wb[i] - chase; d -= Math.floor(d);
+      const v = Q.wheelChase ? (0.25 + Math.pow(1 - d, 6) * 0.95) : 0.55;
+      wc[o] = v; wc[o + 1] = v * 0.72; wc[o + 2] = v * 0.34;
+    }
+    this.wheel.children[1].geometry.attributes.color.needsUpdate = true;
+
+    /* distant stage glows breathe out of phase with each other */
+    for(let i = 0; i < this.glows.length; i++){
+      const g2 = this.glows[i];
+      g2.mesh.material.opacity = 0.035 + Math.abs(Math.sin(t * g2.speed * 0.35 + g2.phase)) * 0.055;
+    }
+
+    /* aircraft lamps: slow red blink, each mast on its own beat */
+    const tc = this.towerCol;
+    for(let i = 0; i < 4; i++){
+      const o = i * 3;
+      const v = Math.sin(t * 1.4 + i * 1.9) > 0.72 ? 1.0 : 0.06;
+      tc[o] = v; tc[o + 1] = v * 0.08; tc[o + 2] = v * 0.05;
+    }
+    this.towerLamps.geometry.attributes.color.needsUpdate = true;
+
+    /* far crowd: one float per instance, every third frame. The near crowd
+       in World writes ~50 floats per instance every frame; this must not. */
+    if(this.farCrowd && (++this.farTick % 3) === 0){
+      const F = this.farArr, H = this.farHeadArr, amp = 0.25 + G.bassLevel * 0.9;
+      for(let i = 0; i < this.farZ.length; i++){
+        const y = -6.4 + Math.max(0, Math.sin(t * 6.2 + this.farPhase[i] * 0.7)) * amp;
+        F[i * 16 + 13] = y;
+        H[i * 16 + 13] = y;
+      }
+      this.farCrowd.instanceMatrix.needsUpdate = true;
+      this.farHeads.instanceMatrix.needsUpdate = true;
+    }
+
+    /* 34 full matrix writes is free; sway scales with the mids */
+    const TA = this.totemArr, sway = 0.06 + G.midLevel * 0.14;
+    for(let i = 0; i < this.totemX.length; i++){
+      const o = i * 16;
+      const a = Math.sin(t * 1.6 + this.totemPhase[i]) * sway;
+      const s = this.totemScale[i];
+      const ca = Math.cos(a) * s, sa = Math.sin(a) * s;
+      TA[o] = ca;      TA[o + 1] = sa;  TA[o + 2] = 0;  TA[o + 3] = 0;
+      TA[o + 4] = -sa; TA[o + 5] = ca;  TA[o + 6] = 0;  TA[o + 7] = 0;
+      TA[o + 8] = 0;   TA[o + 9] = 0;   TA[o + 10] = s; TA[o + 11] = 0;
+      TA[o + 12] = this.totemX[i];
+      TA[o + 13] = this.totemY[i];
+      TA[o + 14] = this.totemZ[i];
+      TA[o + 15] = 1;
+    }
+    this.totems.instanceMatrix.needsUpdate = true;
+  },
+
+  /* The far field. One instanced mesh, body and head merged, no arms — they
+     do not read past ~30 units under fog, and dropping them removes a whole
+     instance buffer. Placement is a wedge widening with distance.
+     ponytail: Y-bob only, written every 3rd frame from JS. If this ever
+     shows up in a profile, move the bob into a vertex shader and stop
+     touching the matrix buffer at all. */
+  buildFarCrowd(scene){
+    const N = Q.farCrowd;
+    this.farX = new Float32Array(N);
+    this.farZ = new Float32Array(N);
+    this.farPhase = new Float32Array(N);
+    if(N === 0){ this.farCrowd = null; return; }
+
+    /* Body and head are SEPARATE instanced meshes, matching World.buildCrowd.
+       Merged into one, setColorAt paints the head with the shirt colour and
+       every body reads as a featureless post instead of a person. */
+    const T = new THREE.Matrix4();
+    const bodyGeo = mergeParts([
+      { geo: new THREE.CylinderGeometry(0.30, 0.40, 1.25, 5, 1),
+        matrix: T.clone().makeTranslation(0, 0.30, 0) }
+    ]);
+    const headGeo = mergeParts([
+      { geo: new THREE.SphereGeometry(0.27, 6, 4),
+        matrix: T.clone().makeTranslation(0, 1.16, 0) }
+    ]);
+
+    /* Warm, and lifted well above World's SHIRTS/SKINS. The near crowd is lit
+       by the rim, blinder and strobe point lights, all of which die inside
+       ~80 units; out here only the cool ambient and hemisphere reach, so an
+       unlifted cold palette renders blue against a warm-brown near crowd. */
+    const SHIRTS = [0x0e1018, 0x11131c, 0x181310, 0x0d1119, 0x1a1012,
+                    0x14141a, 0x24100a, 0x0e1620, 0x0c0f14, 0x1a170e];
+    const SKINS  = [0x2e2318, 0x261c12, 0x1c150d, 0x352a1e, 0x221a11];
+    const col = new THREE.Color();
+
+    const mat = () => new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0.05 });
+    this.farCrowd = new THREE.InstancedMesh(bodyGeo, mat(), N);
+    this.farHeads = new THREE.InstancedMesh(headGeo, mat(), N);
+    this.farCrowd.frustumCulled = false;
+    this.farHeads.frustumCulled = false;
+    this.farArr = this.farCrowd.instanceMatrix.array;
+    this.farHeadArr = this.farHeads.instanceMatrix.array;
+
+    const M = new THREE.Matrix4(), E = new THREE.Euler(), Qt = new THREE.Quaternion();
+    const P = new THREE.Vector3(), S = new THREE.Vector3();
+    for(let i = 0; i < N; i++){
+      /* pow > 1 packs the field toward the FRONT, so density falls with
+         distance. pow < 1 does the opposite and leaves a sparse gap right
+         where the far field has to meet the near crowd. */
+      const z = 18 + Math.pow(Math.random(), 1.35) * 54;
+      const x = (Math.random() - 0.5) * FAR_W(z);
+      this.farX[i] = x;
+      this.farZ[i] = z;
+      this.farPhase[i] = Math.random() * Math.PI * 2;
+      const s = 0.85 + Math.random() * 0.35;
+      P.set(x, -6.4, z);
+      E.set(0, (Math.random() - 0.5) * 0.9, 0);
+      Qt.setFromEuler(E);
+      S.set(s, s, s);
+      M.compose(P, Qt, S);
+      M.toArray(this.farArr, i * 16);
+      M.toArray(this.farHeadArr, i * 16);
+      this.farCrowd.setColorAt(i, col.setHex(SHIRTS[(Math.random() * SHIRTS.length) | 0]));
+      this.farHeads.setColorAt(i, col.setHex(SKINS[(Math.random() * SKINS.length) | 0]));
+    }
+    this.farCrowd.instanceColor.needsUpdate = true;
+    this.farHeads.instanceColor.needsUpdate = true;
+    this.farCrowd.instanceMatrix.needsUpdate = true;
+    this.farHeads.instanceMatrix.needsUpdate = true;
+    scene.add(this.farCrowd);
+    scene.add(this.farHeads);
+  },
+
+  /** Placement invariants for the far field. Throws on violation.
+      Run from the console: Festival.selfCheck() */
+  selfCheck(){
+    const N = this.farX.length;
+    if(N !== Q.farCrowd) throw new Error('far crowd count ' + N + ' != Q.farCrowd ' + Q.farCrowd);
+    for(let i = 0; i < N; i++){
+      const z = this.farZ[i], x = this.farX[i];
+      if(z < 18 || z > 72) throw new Error('i=' + i + ' z=' + z + ' outside [18,72]');
+      /* nobody may stand in front of the barricade at z = -14 */
+      if(z <= -14) throw new Error('i=' + i + ' z=' + z + ' is in front of the barricade');
+      const halfW = FAR_W(z) * 0.5;
+      if(Math.abs(x) > halfW + 1e-6) throw new Error('i=' + i + ' x=' + x + ' outside wedge ±' + halfW);
+    }
+    return true;
+  },
+
+  /* Totems and flags: the thing that makes a crowd read as a festival crowd
+     rather than an audience. Pole plus a sign, instanced, swaying on the mids.
+     No sign texture: InstancedMesh cannot offset UVs per instance without a
+     custom attribute and a shader patch, and a flat accent colour under the
+     existing bloom already reads as a totem at this distance. */
+  buildTotems(scene){
+    const N = 34;
+    const T = new THREE.Matrix4();
+    const geo = mergeParts([
+      { geo: new THREE.CylinderGeometry(0.05, 0.05, 3.4, 4),
+        matrix: T.clone().makeTranslation(0, 1.7, 0) },
+      { geo: new THREE.BoxGeometry(1.1, 0.8, 0.06),
+        matrix: T.clone().makeTranslation(0, 3.7, 0) }
+    ]);
+
+    this.totems = new THREE.InstancedMesh(geo,
+      new THREE.MeshBasicMaterial({ color: 0xffffff }), N);
+    this.totems.frustumCulled = false;
+    this.totemArr = this.totems.instanceMatrix.array;
+
+    this.totemX = new Float32Array(N);
+    this.totemZ = new Float32Array(N);
+    this.totemY = new Float32Array(N);
+    this.totemPhase = new Float32Array(N);
+    this.totemScale = new Float32Array(N);
+
+    const ACCENT = [C_CRIMSON, C_BONE, C_STEEL, 0xe5a93b, 0x00d2ff];
+    const col = new THREE.Color();
+    for(let i = 0; i < N; i++){
+      this.totemX[i] = (Math.random() - 0.5) * 46;
+      this.totemZ[i] = -10 + Math.random() * 26;
+      /* every fourth one is a tall flag rather than a sign on a stick */
+      this.totemY[i] = -6.4 + (i % 4 === 0 ? 2.6 : 1.4);
+      this.totemScale[i] = (i % 4 === 0 ? 1.35 : 0.9) + Math.random() * 0.25;
+      this.totemPhase[i] = Math.random() * Math.PI * 2;
+      this.totems.setColorAt(i, col.setHex(ACCENT[(Math.random() * ACCENT.length) | 0]));
+    }
+    this.totems.instanceColor.needsUpdate = true;
+    scene.add(this.totems);
+  }
+};
+
+/* ==========================================================================
+   MODULE: Band — four performers and a drum kit, procedural, animated
+   Figures are jointed Groups (torso / head / shoulder / elbow) so the whole
+   rig animates by rotating six pivots per body instead of rebuilding geometry.
+   ========================================================================== */
+const Band = {
+  mats:null, members:[], cymbals:[], kickDrum:null, spot:null, wash:null,
+
+  init(scene){
+    this.mats = {
+      /* r128 has no colour management: outputEncoding gamma-lifts everything,
+         so albedo is authored roughly 2.5x darker than it should look. */
+      skin: [0x231710, 0x1b110a, 0x140c07, 0x2a1d14].map(c =>
+        new THREE.MeshStandardMaterial({ color:c, roughness:0.78, metalness:0.02 })),
+      hair:   new THREE.MeshStandardMaterial({ color:0x030202, roughness:0.9 }),
+      jeans:  new THREE.MeshStandardMaterial({ color:0x050810, roughness:0.94 }),
+      boot:   new THREE.MeshStandardMaterial({ color:0x020305, roughness:0.6, metalness:0.2 }),
+      chrome: new THREE.MeshStandardMaterial({ color:0x3a4149, roughness:0.2, metalness:0.95 }),
+      shell:  new THREE.MeshStandardMaterial({ color:0x070203, roughness:0.32, metalness:0.6 }),
+      drumHead: new THREE.MeshStandardMaterial({ color:0x2a2823, roughness:0.62 }),
+      brass:  new THREE.MeshStandardMaterial({ color:0x35280c, roughness:0.28, metalness:0.92 }),
+      dark:   new THREE.MeshStandardMaterial({ color:0x020305, roughness:0.72, metalness:0.25 })
+    };
+
+    const DECK = -2.2;      // top of the stage deck
+    const RISER = -0.4;     // top of the drum riser
+
+    this.singer = this.figure({ skin:0, shirt:0x0c0406, longHair:true });
+    this.singer.g.position.set(0.3, DECK, -21.5);
+    this.singer.g.rotation.y = 0.04;
+    this.micStand(scene, -0.05, DECK, -20.95);
+
+    this.gtr = this.figure({ skin:1, shirt:0x040609, longHair:true });
+    this.gtr.g.position.set(-9, DECK, -25);
+    this.gtr.g.rotation.y = 0.32;
+    this.gtr.inst = this.guitar(this.gtr.torso, { color:0x8a0d00, bass:false });
+    this.gtr.speed = 3.1;
+
+    this.bassist = this.figure({ skin:2, shirt:0x060503, longHair:false, vest:true });
+    this.bassist.g.position.set(9, DECK, -25);
+    this.bassist.g.rotation.y = -0.32;
+    this.bassist.inst = this.guitar(this.bassist.torso, { color:0x16303f, bass:true });
+    this.bassist.speed = 2.2;
+
+    this.drummer = this.figure({ skin:3, shirt:0x080304, longHair:true, seated:true });
+    this.drummer.g.position.set(0, RISER, -38.4);
+    this.kit(scene, 0, RISER, -37.2);
+
+    this.members = [this.singer, this.gtr, this.bassist, this.drummer];
+    for(const m of this.members){
+      scene.add(m.g);
+      m.baseY = m.g.position.y;
+    }
+
+    /* follow spot on whoever the camera is featuring, plus a front wash so
+       the performers are actually lit and not silhouettes */
+    this.spot = new THREE.SpotLight(C_BONE, 1.1, 60, 0.30, 0.7, 1.3);
+    this.spot.position.set(0, 15, -14);
+    scene.add(this.spot);
+    scene.add(this.spot.target);
+    this.spot.target.position.set(0, -1, -26);
+
+    this.wash = new THREE.SpotLight(0xffd9a8, 0.20, 70, 0.58, 0.85, 1.2);
+    this.wash.position.set(0, 9, -6);
+    this.wash.target.position.set(0, -1.5, -30);
+    scene.add(this.wash);
+    scene.add(this.wash.target);
+  },
+
+  /** Queue a primitive for baking, with its local placement. */
+  piece(list, geo, x, y, z, rx, ry, rz, sx, sy, sz){
+    const P = new THREE.Vector3(x, y, z);
+    const Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0));
+    const S = new THREE.Vector3(sx === undefined ? 1 : sx, sy === undefined ? 1 : sy,
+                                sz === undefined ? 1 : sz);
+    list.push({ geo, matrix: new THREE.Matrix4().compose(P, Q, S) });
+  },
+
+  /** One mesh per body part per material. Built piece by piece the four
+      performers cost ~96 draw calls; baked they cost ~55. */
+  bake(parent, parts, mat){
+    if(!parts.length) return null;
+    const m = new THREE.Mesh(mergeParts(parts), mat);
+    parent.add(m);
+    return m;
+  },
+
+  add(parent, geo, mat, x, y, z, rx, ry, rz){
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    if(rx || ry || rz) m.rotation.set(rx || 0, ry || 0, rz || 0);
+    parent.add(m);
+    return m;
+  },
+
+  /** One performer, origin at the feet, facing +z. */
+  figure(cfg){
+    const M = this.mats;
+    const g = new THREE.Group();
+    const skin = M.skin[cfg.skin];
+    const shirt = new THREE.MeshStandardMaterial({ color:cfg.shirt, roughness:0.86, metalness:0.06 });
+
+    const jeans = [], boots = [], chrome = [], dark = [];
+    if(cfg.seated){
+      this.piece(dark, new THREE.CylinderGeometry(0.34, 0.30, 0.14, 12), 0, 0.90, 0);
+      this.piece(chrome, new THREE.CylinderGeometry(0.05, 0.05, 0.90, 8), 0, 0.45, 0);
+      for(const sx of [-1, 1]){
+        this.piece(jeans, new THREE.BoxGeometry(0.26, 0.24, 0.72), sx * 0.20, 0.86, 0.34);
+        this.piece(jeans, new THREE.CylinderGeometry(0.13, 0.11, 0.72, 8), sx * 0.20, 0.40, 0.66);
+        this.piece(boots, new THREE.BoxGeometry(0.30, 0.20, 0.56), sx * 0.20, 0.10, 0.82);
+      }
+    } else {
+      for(const sx of [-1, 1]){
+        this.piece(jeans, new THREE.CylinderGeometry(0.155, 0.125, 0.96, 8), sx * 0.19, 0.66, 0);
+        this.piece(boots, new THREE.BoxGeometry(0.30, 0.22, 0.62), sx * 0.19, 0.11, 0.07);
+      }
+    }
+    const hipY = cfg.seated ? 1.04 : 1.20;
+    this.piece(jeans, new THREE.BoxGeometry(0.60, 0.30, 0.36), 0, hipY, cfg.seated ? 0.04 : 0);
+    this.bake(g, jeans, M.jeans);
+    this.bake(g, boots, M.boot);
+    this.bake(g, chrome, M.chrome);
+    this.bake(g, dark, M.dark);
+
+    const torso = new THREE.Group();
+    torso.position.set(0, hipY + 0.10, 0);
+    g.add(torso);
+    const top = [];
+    this.piece(top, new THREE.BoxGeometry(0.72, 0.76, 0.40), 0, 0.36, 0);
+    this.piece(top, new THREE.BoxGeometry(0.88, 0.22, 0.42), 0, 0.70, 0);
+    this.bake(torso, top, shirt);
+    if(cfg.vest) this.add(torso, new THREE.BoxGeometry(0.78, 0.66, 0.46), M.boot, 0, 0.34, 0);
+    this.add(torso, new THREE.CylinderGeometry(0.09, 0.10, 0.16, 8), skin, 0, 0.86, 0);
+
+    const head = new THREE.Group();
+    head.position.set(0, 0.92, 0);
+    torso.add(head);
+    const face = [], hair = [];
+    this.piece(face, new THREE.SphereGeometry(0.20, 12, 10), 0, 0.19, 0.01, 0, 0, 0, 1, 1.14, 1.06);
+    this.piece(hair, new THREE.SphereGeometry(0.225, 12, 10, 0, Math.PI * 2, 0, 1.9),
+               0, 0.20, -0.01, 0, 0, 0, 1, 1.08, 1.06);
+    if(cfg.longHair) this.piece(hair, new THREE.BoxGeometry(0.36, 0.54, 0.16), 0, 0.02, -0.18);
+    this.bake(head, face, skin);
+    this.bake(head, hair, M.hair);
+
+    const arms = [];
+    for(const sx of [-1, 1]){
+      const sh = new THREE.Group();
+      sh.position.set(sx * 0.45, 0.66, 0);
+      torso.add(sh);
+      this.add(sh, new THREE.CylinderGeometry(0.10, 0.088, 0.44, 8), shirt, 0, -0.22, 0);
+      const el = new THREE.Group();
+      el.position.set(0, -0.44, 0);
+      sh.add(el);
+      const fore = [];
+      this.piece(fore, new THREE.CylinderGeometry(0.082, 0.072, 0.42, 8), 0, -0.21, 0);
+      this.piece(fore, new THREE.SphereGeometry(0.095, 8, 6), 0, -0.44, 0);
+      this.bake(el, fore, skin);
+      arms.push({ sh, el });
+    }
+    return { g, torso, head, arms, speed:2.6 };
+  },
+
+  /** Slung guitar or bass, parented to a torso so it moves with the body. */
+  guitar(torso, cfg){
+    const M = this.mats;
+    const body = new THREE.MeshStandardMaterial({ color:cfg.color, roughness:0.22, metalness:0.55 });
+    const grp = new THREE.Group();
+    grp.position.set(0.02, 0.24, 0.30);
+    grp.rotation.set(0.16, -0.16, cfg.bass ? 0.46 : 0.38);
+    torso.add(grp);
+
+    const disc = new THREE.CylinderGeometry(1, 1, 0.10, 14);
+    const shell = [], neck = [];
+    this.piece(shell, disc, 0, -0.14, 0, Math.PI / 2, 0, 0, 0.30, 1, 0.30);
+    this.piece(shell, disc, 0,  0.16, 0, Math.PI / 2, 0, 0, 0.24, 1, 0.24);
+    this.piece(shell, new THREE.BoxGeometry(0.44, 0.34, 0.10), 0, 0.01, 0);
+    this.piece(neck, new THREE.BoxGeometry(0.085, cfg.bass ? 1.22 : 1.02, 0.06),
+               0, cfg.bass ? 0.88 : 0.78, 0.02);
+    this.piece(neck, new THREE.BoxGeometry(0.16, 0.24, 0.05),
+               0, cfg.bass ? 1.58 : 1.38, 0.02);
+    this.bake(grp, shell, body);
+    this.bake(grp, neck, M.dark);
+    this.add(grp, new THREE.BoxGeometry(0.28, 0.06, 0.13), M.chrome, 0, -0.02, 0.05);
+    return grp;
+  },
+
+  micStand(scene, x, y, z){
+    const M = this.mats;
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    const ch = [], dk = [];
+    this.piece(dk, new THREE.CylinderGeometry(0.22, 0.26, 0.05, 12), 0, 0.03, 0);
+    this.piece(ch, new THREE.CylinderGeometry(0.035, 0.035, 2.24, 8), 0, 1.13, 0);
+    this.piece(ch, new THREE.CylinderGeometry(0.028, 0.028, 0.34, 8), 0, 2.26, 0.12, -Math.PI / 2.6);
+    this.piece(dk, new THREE.CylinderGeometry(0.05, 0.04, 0.20, 8), 0, 2.36, 0.26, -Math.PI / 2.6);
+    this.piece(ch, new THREE.SphereGeometry(0.06, 8, 6), 0, 2.40, 0.34);
+    this.bake(g, ch, M.chrome);
+    this.bake(g, dk, M.dark);
+    scene.add(g);
+  },
+
+  /** Full kit. Shells, heads and hardware are merged; cymbals stay separate
+      so they can wobble on a hit. */
+  kit(scene, x, y, z){
+    const M = this.mats;
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = Math.PI;                 // kit faces the drummer
+    scene.add(g);
+    this.kitGroup = g;
+
+    const shellGeo = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true);
+    const headGeo  = new THREE.CircleGeometry(1, 16);
+    const rodGeo   = new THREE.CylinderGeometry(0.028, 0.028, 1, 6);
+    const shells = [], heads = [], rods = [];
+    const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler();
+    const P = new THREE.Vector3(), S = new THREE.Vector3();
+    const put = (list, geo, px, py, pz, rx, ry, rz, sx, sy, sz) => {
+      P.set(px, py, pz); E.set(rx, ry, rz); Q.setFromEuler(E); S.set(sx, sy, sz);
+      list.push({ geo, matrix: M4.clone().compose(P, Q, S) });
+    };
+    /* a drum = open shell + two heads, all axis-aligned to the shell */
+    const drum = (px, py, pz, r, h, rx) => {
+      put(shells, shellGeo, px, py, pz, rx, 0, 0, r, h, r);
+      const dy = Math.cos(rx) * h / 2, dz = -Math.sin(rx) * h / 2;
+      put(heads, headGeo, px, py + dy, pz + dz, rx - Math.PI / 2, 0, 0, r, r, r);
+      put(heads, headGeo, px, py - dy, pz - dz, rx + Math.PI / 2, 0, 0, r, r, r);
+    };
+    const rod = (px, py, pz, len) => put(rods, rodGeo, px, py, pz, 0, 0, 0, 1, len, 1);
+
+    drum(0, 0.62, 0.35, 0.62, 0.56, Math.PI / 2);                 // kick
+    drum(-0.42, 0.78, -0.10, 0.34, 0.18, 0.10);                   // snare
+    drum(-0.24, 1.16, -0.52, 0.28, 0.30, 0.42);                   // rack tom 1
+    drum(0.30, 1.18, -0.56, 0.31, 0.32, 0.42);                    // rack tom 2
+    drum(0.92, 0.62, -0.18, 0.40, 0.50, 0.05);                    // floor tom
+    rod(-0.42, 0.36, -0.10, 0.72);
+    rod(0.92, 0.30, -0.18, 0.60);
+    rod(-1.00, 0.62, -0.05, 1.24);                                // hi-hat post
+    rod(-1.12, 0.86, -0.72, 1.72);                                // crash L post
+    rod(1.16, 0.90, -0.70, 1.80);                                 // crash R post
+    rod(1.24, 0.72, -0.10, 1.44);                                 // ride post
+    for(const px of [-0.62, 0.62]) rod(px, 0.10, 0.62, 0.20);     // kick legs
+
+    g.add(new THREE.Mesh(mergeParts(shells), M.shell));
+    g.add(new THREE.Mesh(mergeParts(heads), M.drumHead));
+    g.add(new THREE.Mesh(mergeParts(rods), M.chrome));
+
+    const cym = (px, py, pz, r, tilt) => {
+      const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.02, 20), M.brass);
+      c.position.set(px, py, pz);
+      c.rotation.z = tilt;
+      c.userData.tilt = tilt;
+      g.add(c);
+      this.cymbals.push(c);
+      return c;
+    };
+    cym(-1.00, 1.26, -0.05, 0.32, 0.06);      // hi-hat top
+    cym(-1.00, 1.18, -0.05, 0.32, 0);         // hi-hat bottom
+    cym(-1.12, 1.74, -0.72, 0.42, 0.18);      // crash L
+    cym(1.16, 1.82, -0.70, 0.40, -0.16);      // crash R
+    cym(1.24, 1.46, -0.10, 0.50, -0.10);      // ride
+  },
+
+  update(t){
+    const mid = G.midLevel, bass = G.bassLevel;
+    const kick = G.kick, snare = G.snare;
+
+    /* guitarist + bassist: headbang, strum arm, fret hand walking the neck */
+    for(const m of [this.gtr, this.bassist]){
+      const sp = m.speed;
+      m.torso.rotation.x = 0.05 + Math.sin(t * sp) * 0.09 * (0.4 + mid);
+      m.torso.rotation.y = Math.sin(t * sp * 0.4) * 0.10;
+      m.head.rotation.x = Math.sin(t * sp * 2.2) * (0.16 + mid * 0.60);
+      m.head.rotation.z = Math.sin(t * sp * 0.7) * 0.09;
+      m.arms[1].sh.rotation.x = -0.46 + Math.sin(t * sp * 4) * (0.13 + mid * 0.22);
+      m.arms[1].sh.rotation.z = -0.26;
+      m.arms[1].el.rotation.x = -0.80;
+      m.arms[1].el.rotation.z = -0.42;
+      m.arms[0].sh.rotation.x = -0.34;
+      m.arms[0].sh.rotation.z = -0.34 - Math.sin(t * 1.7) * 0.07;
+      m.arms[0].el.rotation.x = -0.72;
+      m.arms[0].el.rotation.z = -0.62 + Math.sin(t * 2.3) * 0.09;
+      m.g.position.y = m.baseY + Math.max(0, Math.sin(t * 5.6)) * 0.05 * bass;
+    }
+
+    /* singer: works the mic, throws a fist up as the streak climbs */
+    const s = this.singer;
+    s.torso.rotation.x = 0.12 + mid * 0.22;
+    s.torso.rotation.y = Math.sin(t * 1.1) * 0.22;
+    s.head.rotation.x = -0.14 - mid * 0.26;
+    s.arms[1].sh.rotation.x = -1.30 - mid * 0.18;     // hand up on the mic
+    s.arms[1].sh.rotation.z = -0.16;
+    s.arms[1].el.rotation.x = -0.62;
+    s.arms[1].el.rotation.z = -0.24;
+    const raise = Math.min(1, G.combo / 30);           // fist up as the streak climbs
+    s.arms[0].sh.rotation.x = -0.14 - raise * 2.55;
+    s.arms[0].sh.rotation.z = -0.12 - raise * 0.34;
+    s.arms[0].el.rotation.x = -0.30 + raise * 0.22;
+    s.g.position.y = s.baseY + Math.max(0, Math.sin(t * 4.4)) * 0.07 * (0.3 + bass);
+
+    /* drummer: left hand rides the hats, right hand answers the snare */
+    const d = this.drummer;
+    const hat = Math.max(0, Math.sin(t * 9.5));
+    d.head.rotation.x = Math.sin(t * 6.8) * (0.10 + mid * 0.34);
+    d.arms[0].sh.rotation.x = -1.02 - hat * 0.20;
+    d.arms[0].sh.rotation.z = -0.52;
+    d.arms[0].el.rotation.x = -0.86 - hat * 0.24;
+    d.arms[1].sh.rotation.x = -0.98 - snare * 0.42;
+    d.arms[1].sh.rotation.z = 0.44;
+    d.arms[1].el.rotation.x = -0.74 - snare * 0.52;
+    d.torso.rotation.x = 0.16 + snare * 0.10;
+
+    for(let i = 0; i < this.cymbals.length; i++){
+      const c = this.cymbals[i];
+      c.rotation.z = c.userData.tilt + Math.sin(t * 26 + i) * 0.10 * (i < 2 ? hat * 0.4 : snare);
+    }
+    if(this.kitGroup) this.kitGroup.position.z = -37.2 + kick * 0.04;
+
+    /* follow spot chases whatever the director is featuring */
+    const tgt = this.spot.target.position;
+    const f = Director.focus;
+    tgt.x += (f.x - tgt.x) * 0.08;
+    tgt.y += (f.y - tgt.y) * 0.08;
+    tgt.z += (f.z - tgt.z) * 0.08;
+    this.spot.intensity = 0.9 + bass * 1.2;
+    this.wash.intensity = 0.16 + mid * 0.24;
+  }
+};
+
+/* ==========================================================================
+   MODULE: Director — camera shot list for the venue pass
+   Each shot is a real camera move in venue space: a = where it starts,
+   b = where it drifts to over the shot. Cuts wait for a bass hit so the
+   edit lands on the music instead of on a stopwatch.
+   ========================================================================== */
+const SHOTS = [
+  /* name        fov  ax    ay    az    lx    ly    lz  |  bx    by    bz    lx    ly    lz  | min max */
+  { n:'wide',    fov:56, a:[  4.5,  6.5, 18.0, -2.2, 3.0,-30.0], b:[  2.5,  5.0, 12.5, -2.6, 2.2,-32.0], d:[5.0, 8.0] },
+  { n:'pit',     fov:68, a:[ -6.0, -4.6,  3.5,  1.8, 1.6,-26.0], b:[ -3.5, -4.0,  1.0,  3.4, 2.2,-28.0], d:[3.0, 5.0] },
+  { n:'crowd',   fov:64, a:[-17.0, -2.8,  9.0,  5.0,-4.4, -1.0], b:[ 12.0, -2.2,  6.5, -6.0,-4.8, -1.0], d:[4.0, 7.0] },
+  /* Band shots aim off-axis on purpose: the highway owns the middle of the
+     frame, so the performer is composed into the left or right third. */
+  { n:'gtr',     fov:40, a:[ -2.0,  0.2,-13.0, -4.3,-1.5,-27.7], b:[ -3.2,  0.7,-14.6, -4.3,-1.5,-27.7], d:[3.0, 5.0] },
+  { n:'bass',    fov:40, a:[  2.0,  0.2,-13.0,  4.3,-1.5,-27.7], b:[  3.2,  0.7,-14.6,  4.3,-1.5,-27.7], d:[3.0, 5.0] },
+  { n:'drums',   fov:46, a:[  5.5,  3.2,-24.0,  5.8,-0.2,-40.5], b:[  4.2,  2.6,-26.0,  5.8,-0.2,-40.5], d:[3.0, 6.0] },
+  { n:'singer',  fov:36, a:[  4.2,  0.6,-13.5,  2.9,-0.9,-22.7], b:[  3.2,  1.0,-15.2,  2.9,-0.9,-22.7], d:[3.0, 5.0] },
+  { n:'crane',   fov:60, a:[ -5.0, 14.5,  7.0,  2.6, 1.0,-32.0], b:[ -3.0,  6.8, 11.0,  2.4, 2.2,-30.0], d:[5.0, 8.0] },
+  { n:'back',    fov:48, a:[ 18.0,  2.2,-11.0, -6.0, 0.0,-30.0], b:[ 13.0,  1.0, -9.0, -4.0,-0.5,-28.0], d:[4.0, 6.0] },
+  /* Turn around. Everything behind the crowd — the far field, the totems,
+     the phone sea, the wheel — exists only because these two shots see it. */
+  { n:'reverse', fov:62, a:[ -3.0, -1.0,-17.5,   2.0,-3.0, 30.0],
+                         b:[  3.0, -0.4,-19.0,  -2.0,-2.4, 36.0], d:[4.0, 6.5] },
+  { n:'skyline', fov:50, a:[  0.0,  9.0,-22.0,  14.0, 2.0, 70.0],
+                         b:[  6.0, 11.0,-24.0,  22.0, 4.0, 80.0], d:[4.0, 6.0] }
+];
+/* where the follow spot points during each shot */
+const SHOT_FOCUS = { gtr:[-9, -1, -25], bass:[9, -1, -25], singer:[0.3, -1, -21.5], drums:[0, 0.4, -37.5],
+                     reverse:[0, -4, 10] };
+
+const Director = {
+  i:-1, t:0, dur:5, left:0, grace:0, bag:[],
+  look:new THREE.Vector3(),
+  focus:new THREE.Vector3(0, -1, -26),
+
+  next(force){
+    if(force !== undefined){
+      this.i = force;
+    } else {
+      if(!this.bag.length){
+        this.bag = SHOTS.map((s, k) => k);
+        for(let k = this.bag.length - 1; k > 0; k--){
+          const j = (Math.random() * (k + 1)) | 0;
+          const tmp = this.bag[k]; this.bag[k] = this.bag[j]; this.bag[j] = tmp;
+        }
+        if(this.bag[0] === this.i) this.bag.push(this.bag.shift());
+      }
+      this.i = this.bag.shift();
+    }
+    const s = SHOTS[this.i];
+    this.dur = s.d[0] + Math.random() * (s.d[1] - s.d[0]);
+    this.left = this.dur;
+    this.grace = 1.5;
+    this.t = 0;
+    World.cine.fov = s.fov;
+    World.cine.updateProjectionMatrix();
+    const f = SHOT_FOCUS[s.n];
+    this.focus.set(f ? f[0] : 0, f ? f[1] : -1, f ? f[2] : -26);
+  },
+
+  update(dt){
+    if(this.i < 0) this.next();
+    this.t += dt;
+    this.left -= dt;
+    if(this.left <= 0){
+      /* hold the cut for up to 1.5 s waiting on a kick, then cut anyway */
+      if(G.strobe > 0.5 || this.grace <= 0) this.next();
+      else this.grace -= dt;
+    }
+
+    const s = SHOTS[this.i], a = s.a, b = s.b;
+    const k = Math.min(1, this.t / this.dur);
+    const e = k * k * (3 - 2 * k);                       // smoothstep dolly
+    const sh = (G.state === 'play' ? G.bassLevel : 0.18) * 0.14;
+    const c = World.cine;
+    c.position.set(
+      a[0] + (b[0] - a[0]) * e + Math.sin(this.t * 1.7) * 0.14 + Math.sin(this.t * 12.3) * sh,
+      a[1] + (b[1] - a[1]) * e + Math.cos(this.t * 1.3) * 0.10 + Math.cos(this.t * 10.7) * sh,
+      a[2] + (b[2] - a[2]) * e
+    );
+    this.look.set(
+      a[3] + (b[3] - a[3]) * e,
+      a[4] + (b[4] - a[4]) * e + Math.sin(this.t * 0.9) * 0.12,
+      a[5] + (b[5] - a[5]) * e
+    );
+    c.lookAt(this.look);
+  }
+};
+
+/* ==========================================================================
+   MODULE: Highway3D — fretboard, receptors, gem/tail/particle pools
+   ========================================================================== */
+const Highway = {
+  group:null,
+  gems:[], tails:[],
+  sparks:null, sparkPos:null, sparkCol:null,
+  sparkVel:null, sparkLife:null, sparkBase:null,
+  gemMats:[], tailMats:[], receptors:[], receptorGlow:[],
+  laneBeams:[],
+  slope: THREE.MathUtils.degToRad(35),
+
+  /** The spark sprite is shared with the venue effects, which are built
+      before the highway itself. */
+  initTextures(){
+    if(!this.spark) this.spark = this.sparkTexture();
+    return this.spark;
+  },
+
+  init(){
+    this.group = new THREE.Group();
+    this.group.rotation.x = this.slope;      // fretboard rises away from camera
+    this.group.position.set(0, 2.2, 2.0);
+    World.play.add(this.group);
+
+    const L = TRAVEL_DIST + 8;
+
+    /* --- deck --- */
+    const deck = new THREE.Mesh(
+      new THREE.PlaneGeometry(LANE_W * 5 + 0.6, L),
+      new THREE.MeshStandardMaterial({
+        color: 0x0a1120, roughness: 0.55, metalness: 0.7,
+        transparent: true, opacity: 0.94
+      })
+    );
+    deck.rotation.x = -Math.PI / 2;
+    deck.position.set(0, 0, -L / 2 + 4);
+    this.group.add(deck);
+
+    /* --- lane separators (steel wireframe) --- */
+    const lineMat = new THREE.MeshBasicMaterial({ color: C_STEEL, transparent: true, opacity: 0.55 });
+    for(let i = 0; i <= 5; i++){
+      const x = -LANE_W * 2.5 + i * LANE_W;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, L), lineMat);
+      m.position.set(x, 0.02, -L / 2 + 4);
+      this.group.add(m);
+    }
+    /* --- fret markers every 4 units --- */
+    for(let z = 0; z > -L + 4; z -= 4){
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(LANE_W * 5, 0.02, 0.06),
+        new THREE.MeshBasicMaterial({ color: C_STEEL, transparent: true, opacity: 0.20 })
+      );
+      m.position.set(0, 0.015, z);
+      this.group.add(m);
+    }
+
+    /* --- per-lane tinted floor beams + receptors --- */
+    for(let i = 0; i < 5; i++){
+      const col = LANE_COLORS[i];
+
+      const beam = new THREE.Mesh(
+        new THREE.PlaneGeometry(LANE_W - 0.14, L - 6),
+        new THREE.MeshBasicMaterial({
+          color: col, transparent: true, opacity: 0.10,
+          blending: THREE.AdditiveBlending, depthWrite: false
+        })
+      );
+      beam.rotation.x = -Math.PI / 2;
+      beam.position.set(LANE_X[i], 0.03, -L / 2 + 3);
+      this.group.add(beam);
+      this.laneBeams.push(beam);
+
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.52, 0.075, 8, 26),
+        new THREE.MeshStandardMaterial({
+          color: C_BONE, emissive: col, emissiveIntensity: 0.5,
+          roughness: 0.25, metalness: 0.9
+        })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(LANE_X[i], 0.10, 0);
+      this.group.add(ring);
+      this.receptors.push(ring);
+
+      const glow = new THREE.Mesh(
+        new THREE.CircleGeometry(0.72, 24),
+        new THREE.MeshBasicMaterial({
+          color: col, transparent: true, opacity: 0,
+          blending: THREE.AdditiveBlending, depthWrite: false
+        })
+      );
+      glow.rotation.x = -Math.PI / 2;
+      glow.position.set(LANE_X[i], 0.06, 0);
+      this.group.add(glow);
+      this.receptorGlow.push(glow);
+    }
+
+    /* --- hit line --- */
+    const hitLine = new THREE.Mesh(
+      new THREE.BoxGeometry(LANE_W * 5 + 0.5, 0.03, 0.14),
+      new THREE.MeshBasicMaterial({ color: C_BONE, transparent: true, opacity: 0.85 })
+    );
+    hitLine.position.set(0, 0.05, 0);
+    this.group.add(hitLine);
+
+    /* --- materials --- */
+    for(let i = 0; i < 5; i++){
+      this.gemMats.push(new THREE.MeshStandardMaterial({
+        color: LANE_COLORS[i], emissive: LANE_COLORS[i], emissiveIntensity: 0.55,
+        metalness: 0.85, roughness: 0.18, flatShading: true
+      }));
+      this.tailMats.push(new THREE.MeshBasicMaterial({
+        color: LANE_COLORS[i], transparent: true, opacity: 0.42,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      }));
+    }
+
+    /* --- pools (all allocated up front, never during gameplay) --- */
+    const gemGeo = new THREE.OctahedronGeometry(0.44, 0);
+    for(let i = 0; i < GEM_POOL; i++){
+      const m = new THREE.Mesh(gemGeo, this.gemMats[0]);
+      m.scale.set(1, 0.55, 1);
+      m.visible = false;
+      m.frustumCulled = false;
+      this.group.add(m);
+      this.gems.push(m);
+    }
+    const tailGeo = new THREE.BoxGeometry(LANE_W * 0.42, 0.16, 1);
+    for(let i = 0; i < TAIL_POOL; i++){
+      const m = new THREE.Mesh(tailGeo, this.tailMats[0]);
+      m.visible = false;
+      this.group.add(m);
+      this.tails.push(m);
+    }
+    /* hit sparks: one additive Points cloud = one draw call for all of them */
+    this.sparkPos  = new Float32Array(PARTICLES * 3);
+    this.sparkCol  = new Float32Array(PARTICLES * 3);
+    this.sparkVel  = new Float32Array(PARTICLES * 3);
+    this.sparkLife = new Float32Array(PARTICLES);
+    this.sparkBase = new Float32Array(PARTICLES * 3);
+    for(let i = 0; i < PARTICLES; i++) this.sparkPos[i * 3 + 1] = -9999;   // parked
+    const sGeo = new THREE.BufferGeometry();
+    sGeo.setAttribute('position', new THREE.BufferAttribute(this.sparkPos, 3));
+    sGeo.setAttribute('color', new THREE.BufferAttribute(this.sparkCol, 3));
+    this.sparks = new THREE.Points(sGeo, new THREE.PointsMaterial({
+      size: 0.34, sizeAttenuation: true, vertexColors: true, map: this.initTextures(),
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    this.sparks.frustumCulled = false;
+    this.group.add(this.sparks);
+  },
+
+  /* soft round spark sprite, drawn once into a canvas */
+  sparkTexture(){
+    const c = document.createElement('canvas');
+    c.width = c.height = 32;
+    const x = c.getContext('2d');
+    const g = x.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.35, 'rgba(255,255,255,0.55)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g;
+    x.fillRect(0, 0, 32, 32);
+    return new THREE.CanvasTexture(c);
+  },
+
+  get speed(){ return TRAVEL_DIST / DIFF[G.diff].approach; },
+
+  burst(lane, count, color){
+    const r = ((color >> 16) & 255) / 255, g = ((color >> 8) & 255) / 255, b = (color & 255) / 255;
+    let spawned = 0;
+    for(let i = 0; i < PARTICLES && spawned < count; i++){
+      if(this.sparkLife[i] > 0) continue;
+      const o = i * 3;
+      this.sparkLife[i] = 0.42 + Math.random() * 0.25;
+      this.sparkPos[o]     = LANE_X[lane] + (Math.random() - 0.5) * 0.35;
+      this.sparkPos[o + 1] = 0.22;
+      this.sparkPos[o + 2] = (Math.random() - 0.5) * 0.35;
+      this.sparkVel[o]     = (Math.random() - 0.5) * 5.0;
+      this.sparkVel[o + 1] = 2.2 + Math.random() * 4.2;
+      this.sparkVel[o + 2] = 1.0 + Math.random() * 3.4;
+      this.sparkBase[o] = r; this.sparkBase[o + 1] = g; this.sparkBase[o + 2] = b;
+      spawned++;
+    }
+    this.sparksDirty = true;
+  },
+
+  updateParticles(dt){
+    if(!this.sparksDirty) return;
+    let alive = 0;
+    const P = this.sparkPos, V = this.sparkVel, C = this.sparkCol, B = this.sparkBase, L = this.sparkLife;
+    for(let i = 0; i < PARTICLES; i++){
+      if(L[i] <= 0) continue;
+      const o = i * 3;
+      L[i] -= dt;
+      if(L[i] <= 0){
+        L[i] = 0;
+        P[o + 1] = -9999;
+        C[o] = C[o + 1] = C[o + 2] = 0;
+        continue;
+      }
+      alive++;
+      P[o]     += V[o] * dt;
+      P[o + 1] += V[o + 1] * dt;
+      P[o + 2] += V[o + 2] * dt;
+      V[o + 1] -= 11 * dt;
+      const f = Math.min(1, L[i] * 2.2);
+      C[o] = B[o] * f; C[o + 1] = B[o + 1] * f; C[o + 2] = B[o + 2] * f;
+    }
+    this.sparks.geometry.attributes.position.needsUpdate = true;
+    this.sparks.geometry.attributes.color.needsUpdate = true;
+    if(alive === 0) this.sparksDirty = false;
+  },
+
+  /** Position gems + tails for the visible window. Zero allocation. */
+  draw(now, t){
+    const speed = this.speed;
+    const approach = DIFF[G.diff].approach;
+    const chart = G.chart;
+    let gi = 0, ti = 0;
+
+    // advance the window start past fully-finished notes
+    while(G.windowStart < chart.length){
+      const n = chart[G.windowStart];
+      if(n.time + n.duration < now - 0.6) G.windowStart++;
+      else break;
+    }
+
+    for(let i = G.windowStart; i < chart.length; i++){
+      const n = chart[i];
+      const dt = n.time - now;
+      if(dt > approach + 0.15) break;
+
+      const headZ = -dt * speed;
+      const tailZ = -(dt + n.duration) * speed;
+
+      /* sustain ribbon */
+      if(n.duration > 0 && ti < TAIL_POOL){
+        const zTop = Math.min(headZ, 0.0);              // clip at receptor once passed
+        const startZ = n.holding || n.hit ? Math.min(zTop, 0) : headZ;
+        const a = Math.min(startZ, 0.2);
+        const b = tailZ;
+        if(b < a){
+          const m = this.tails[ti++];
+          m.visible = true;
+          m.material = this.tailMats[n.lane];
+          m.position.set(LANE_X[n.lane], 0.14, (a + b) / 2);
+          m.scale.z = (a - b);
+          m.scale.y = n.holding ? 1.8 : 1.0;
+          m.scale.x = n.broken ? 0.4 : 1.0;
+          m.material.opacity = n.broken ? 0.14 : (n.holding ? 0.85 : 0.42);
+        }
+      }
+
+      /* gem head */
+      if(headZ < 2.2 && !(n.hit || n.missed) && gi < GEM_POOL){
+        const m = this.gems[gi++];
+        m.visible = true;
+        m.material = this.gemMats[n.lane];
+        m.position.set(LANE_X[n.lane], 0.34, headZ);
+        m.rotation.y = t * 1.9 + i;
+        m.rotation.z = Math.sin(t * 2 + i) * 0.12;
+        const pulse = 1 + Math.max(0, 1 - Math.abs(headZ) / 3) * 0.18;
+        m.scale.set(pulse, 0.55 * pulse, pulse);
+      }
+    }
+
+    for(; gi < GEM_POOL; gi++) this.gems[gi].visible = false;
+    for(; ti < TAIL_POOL; ti++) this.tails[ti].visible = false;
+
+    /* receptors */
+    for(let i = 0; i < 5; i++){
+      const pressed = G.held[i];
+      const fl = G.laneFlash[i];
+      const r = this.receptors[i];
+      const s = pressed ? 0.82 : 1 + fl * 0.55;
+      r.scale.setScalar(s);
+      r.material.emissiveIntensity = 0.4 + fl * 2.6 + (pressed ? 0.8 : 0);
+      this.receptorGlow[i].material.opacity = fl * 0.75 + (pressed ? 0.22 : 0);
+      this.receptorGlow[i].scale.setScalar(1 + fl * 0.9);
+      this.laneBeams[i].material.opacity = 0.10 + fl * 0.16 + (pressed ? 0.06 : 0);
+    }
+
+    this.updateParticles(Engine.dt);
+  }
+};
+
+/* ==========================================================================
+   MODULE: Binds — remappable keyboard and controller bindings
+   One key and one pad slot per lane. Arm a lane, press anything, it binds.
+   ========================================================================== */
+const Binds = {
+  KEY: 'rockgoofy.binds.v1',
+  keys: KEY_PRESETS.ergo.slice(),
+  pads: PAD_PRESETS.frets.slice(),
+  armed: null,                            // lane currently listening, or null
+
+  load(){
+    try {
+      const raw = localStorage.getItem(this.KEY);
+      if(raw){
+        const o = JSON.parse(raw);
+        if(Array.isArray(o.keys) && o.keys.length === 5) this.keys = o.keys.slice();
+        if(Array.isArray(o.pads) && o.pads.length === 5) this.pads = o.pads.slice();
+      }
+    } catch(e){ /* private mode, blocked storage: defaults are fine */ }
+  },
+
+  save(){
+    try {
+      localStorage.setItem(this.KEY, JSON.stringify({ keys:this.keys, pads:this.pads }));
+    } catch(e){ /* not fatal, bindings just will not persist */ }
+  },
+
+  /** Rebuild the lookup tables, then refresh anything on screen showing them. */
+  apply(){
+    Input.map = {};
+    for(let i = 0; i < 5; i++) if(this.keys[i]) Input.map[this.keys[i]] = i;
+
+    Pad.BTN = {};
+    for(let i = 0; i < 5; i++) if(this.pads[i] !== null && this.pads[i] !== undefined) Pad.BTN[this.pads[i]] = i;
+
+    if(Input.caps.length) Input.buildCaps();
+    if(PadUI.rows.length) PadUI.refreshBinds();
+    this.save();
+  },
+
+  arm(lane){
+    this.armed = lane;
+    Input.clear();
+    if(PadUI.rows.length) PadUI.refreshBinds();
+  },
+
+  cancel(){
+    this.armed = null;
+    if(PadUI.rows.length) PadUI.refreshBinds();
+  },
+
+  /* Taking an input another lane owns swaps them, so no lane is left dead. */
+  takeKey(code){
+    const lane = this.armed;
+    if(lane === null) return;
+    const old = this.keys[lane];
+    for(let i = 0; i < 5; i++) if(this.keys[i] === code && i !== lane) this.keys[i] = old;
+    this.keys[lane] = code;
+    this.armed = null;
+    this.apply();
+  },
+
+  takePad(slot){
+    const lane = this.armed;
+    if(lane === null) return;
+    const old = this.pads[lane];
+    for(let i = 0; i < 5; i++) if(this.pads[i] === slot && i !== lane) this.pads[i] = old;
+    this.pads[lane] = slot;
+    this.armed = null;
+    this.apply();
+  },
+
+  preset(which){
+    if(KEY_PRESETS[which]) this.keys = KEY_PRESETS[which].slice();
+    if(PAD_PRESETS[which]) this.pads = PAD_PRESETS[which].slice();
+    this.apply();
+  },
+
+  /** 'KeyD' -> 'D', 'Space' -> 'SPACE', 'ArrowUp' -> '↑' */
+  keyLabel(code){
+    if(!code) return '—';
+    const map = { Space:'␣', ArrowUp:'↑', ArrowDown:'↓', ArrowLeft:'←', ArrowRight:'→',
+                  ShiftLeft:'L SHIFT', ShiftRight:'R SHIFT', ControlLeft:'L CTRL',
+                  ControlRight:'R CTRL', AltLeft:'L ALT', AltRight:'R ALT',
+                  Semicolon:';', Quote:"'", Comma:',', Period:'.', Slash:'/',
+                  BracketLeft:'[', BracketRight:']', Backslash:'\\', Backquote:'`',
+                  Minus:'-', Equal:'=', Enter:'ENTER', Tab:'TAB', Backspace:'BKSP' };
+    if(map[code]) return map[code];
+    if(code.indexOf('Key') === 0) return code.slice(3);
+    if(code.indexOf('Digit') === 0) return code.slice(5);
+    if(code.indexOf('Numpad') === 0) return 'NUM ' + code.slice(6);
+    return code.toUpperCase();
+  },
+
+  padLabel(slot){
+    if(slot === null || slot === undefined) return '—';
+    if(slot >= PAD_AXIS) return ['STICK ↑', 'STICK ↓', 'STICK ←', 'STICK →'][slot - PAD_AXIS];
+    return 'BTN ' + slot;
+  }
+};
+
+/* ==========================================================================
+   MODULE: Input
+   ========================================================================== */
+const Input = {
+  map: {},
+  caps: [],
+  refs: [0, 0, 0, 0, 0],       // how many inputs are holding each lane
+  keyDown: [false, false, false, false, false],
+
+  /* Every source (keyboard, key cap, gamepad button) routes through these, so
+     two inputs on one lane cannot cancel each other's hold. */
+  down(lane){
+    this.refs[lane]++;
+    if(this.refs[lane] > 1) return;
+    G.held[lane] = true;
+    if(this.caps[lane]) this.caps[lane].classList.add('down');
+    if(G.state === 'play') Engine.onPress(lane);
+  },
+
+  up(lane){
+    if(this.refs[lane] > 0) this.refs[lane]--;
+    if(this.refs[lane] > 0) return;
+    G.held[lane] = false;
+    if(this.caps[lane]) this.caps[lane].classList.remove('down');
+    if(G.state === 'play') Engine.onRelease(lane);
+  },
+
+  /** Drop every hold — song start, focus loss. */
+  clear(){
+    for(let i = 0; i < 5; i++){
+      const wasHeld = this.refs[i] > 0 || G.held[i];
+      this.refs[i] = 0;
+      this.keyDown[i] = false;
+      G.held[i] = false;
+      if(this.caps[i]) this.caps[i].classList.remove('down');
+      if(wasHeld && G.state === 'play') Engine.onRelease(i);
+    }
+    Pad.clear();
+  },
+
+  init(){
+    this.buildCaps();
+    addEventListener('keydown', e => {
+      /* rebinding: swallow the next key and assign it */
+      if(Binds.armed !== null){
+        e.preventDefault();
+        if(e.code === 'Escape') Binds.cancel();
+        else if(e.code !== 'Enter' && e.code !== 'Tab') Binds.takeKey(e.code);   // Escape cancels above
+        return;
+      }
+      /* A bound lane always wins: the shortcuts below are only reachable on
+         keys the player has not mapped to a fret. */
+      const lane = this.map[e.code];
+      if(lane === undefined){
+        if(e.code === 'Escape'){
+          if(PadUI.visible) PadUI.hide(); else Engine.togglePause();
+        } else if(e.code === 'KeyR' &&
+                  (G.state === 'play' || G.state === 'paused' || G.state === 'over')){
+          Engine.restart();
+        }
+        return;
+      }
+      e.preventDefault();
+      if(e.repeat || this.keyDown[lane]) return;
+      this.keyDown[lane] = true;
+      this.down(lane);
+    }, { passive:false });
+
+    addEventListener('keyup', e => {
+      const lane = this.map[e.code];
+      if(lane === undefined) return;
+      e.preventDefault();
+      if(!this.keyDown[lane]) return;
+      this.keyDown[lane] = false;
+      this.up(lane);
+    }, { passive:false });
+
+    addEventListener('blur', () => {
+      this.clear();
+      if(G.state === 'play') Engine.togglePause();
+    });
+
+  },
+
+  setScheme(name){
+    G.scheme = name;
+    Binds.preset(name);
+  },
+
+  /* touch / mouse fallback: tap the on-screen key caps */
+  buildCaps(){
+    elKeyRow.innerHTML = '';
+    this.caps = Binds.keys.map((code, i) => {
+      const d = document.createElement('div');
+      d.className = 'keyCap';
+      d.textContent = Binds.keyLabel(code);
+      d.style.borderColor = '#' + LANE_COLORS[i].toString(16).padStart(6, '0');
+      d.style.color = '#' + LANE_COLORS[i].toString(16).padStart(6, '0');
+      d.style.pointerEvents = 'auto';
+
+      let capHeld = false;
+      const down = ev => {
+        ev.preventDefault();
+        if(capHeld) return;
+        capHeld = true;
+        Input.down(i);
+      };
+      const up = ev => {
+        ev.preventDefault();
+        if(!capHeld) return;
+        capHeld = false;
+        Input.up(i);
+      };
+      d.addEventListener('touchstart', down, { passive:false });
+      d.addEventListener('touchend', up, { passive:false });
+      d.addEventListener('touchcancel', up, { passive:false });
+      d.addEventListener('mousedown', down);
+      d.addEventListener('mouseup', up);
+      d.addEventListener('mouseleave', up);
+
+      elKeyRow.appendChild(d);
+      return d;
+    });
+    for(let i = 0; i < PadUI.pills.length; i++)
+      PadUI.pills[i].innerHTML = 'L' + (i + 1) + '<small>' + Binds.keyLabel(Binds.keys[i]) + '</small>';
+  }
+};
+
+/* ==========================================================================
+   MODULE: Pad — gamepads, joysticks and 5-fret guitar controllers
+   The Gamepad API has no events for button state, only snapshots, so this
+   polls. 250 Hz keeps the quantization error near 4 ms instead of a frame.
+   ponytail: fixed 4 ms poll while a pad is attached; gate it on G.state if a
+   low-power device ever cares.
+   ========================================================================== */
+const Pad = {
+  BTN: {},                                 // pad slot -> lane, built by Binds
+  START: 9,
+  prev: new Uint8Array(PAD_SLOTS),
+  now_: new Uint8Array(PAD_SLOTS),
+  refs: [0, 0, 0, 0, 0],
+  timer: null,
+  connected: false,
+
+  init(){
+    if(!navigator.getGamepads) return;               // unsupported browser
+    addEventListener('gamepadconnected', e => {
+      this.connected = true;
+      const first = this.list()[0];
+      this.badge((e.gamepad && e.gamepad.id) || (first && first.id) || 'Gamepad');
+      this.start();
+    });
+    addEventListener('gamepaddisconnected', () => {
+      if(this.list().length) return;
+      this.connected = false;
+      this.stop();
+      this.badge(null);
+    });
+    // a pad already awake at page load may never fire gamepadconnected, so
+    // sweep for one twice a second regardless
+    this.detect();
+    setInterval(() => this.detect(), 500);
+  },
+
+  list(){
+    const out = [];
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for(let i = 0; i < pads.length; i++) if(pads[i]) out.push(pads[i]);
+    return out;
+  },
+
+  /** getGamepads() stays empty until a pad is touched, so the setup screen
+      polls this to catch a first connection without a gamepadconnected. */
+  detect(){
+    const pads = this.list();
+    if(pads.length && !this.connected){
+      this.connected = true;
+      this.badge(pads[0].id);
+      this.start();
+    } else if(!pads.length && this.connected){
+      this.connected = false;
+      this.stop();
+      this.badge(null);
+    }
+    return pads;
+  },
+
+  start(){ if(!this.timer) this.timer = setInterval(() => this.poll(), 4); },
+  stop(){ if(this.timer){ clearInterval(this.timer); this.timer = null; } this.clear(); },
+
+  badge(id){
+    if(!id){ elPadTag.classList.remove('on'); return; }
+    const name = String(id).replace(/\s*\([^)]*\)\s*$/, '').trim().slice(0, 38);
+    elPadTag.innerHTML = 'Controller ready &mdash; <b>' + name + '</b>';
+    elPadTag.classList.add('on');
+  },
+
+  /** Read every attached pad into dst. OR-combined, so a guitar and a pad
+      both work at once. */
+  snapshot(dst){
+    dst.fill(0);
+    const pads = this.list();
+    for(const pad of pads){
+      const b = pad.buttons;
+      for(let i = 0; i < b.length && i < 24; i++){
+        const btn = b[i];
+        if(btn && (btn.pressed || btn.value > 0.5)) dst[i] = 1;
+      }
+      // stick / hat directions live in their own slots, bindable like buttons
+      const ax = pad.axes;
+      if(ax && ax.length >= 2){
+        if(ax[1] < -0.6) dst[PAD_AXIS    ] = 1;      // up
+        if(ax[1] >  0.6) dst[PAD_AXIS + 1] = 1;      // down
+        if(ax[0] < -0.6) dst[PAD_AXIS + 2] = 1;      // left
+        if(ax[0] >  0.6) dst[PAD_AXIS + 3] = 1;      // right
+      }
+    }
+    return pads.length;
+  },
+
+  /** Drop holds without re-firing them: a button still physically down must
+      not read as a fresh press on the next poll. */
+  clear(){
+    this.snapshot(this.prev);
+    for(let i = 0; i < 5; i++) this.refs[i] = 0;
+  },
+
+  poll(){
+    const now = this.now_;
+    if(!this.snapshot(now)) return;
+
+    for(let i = 0; i < PAD_SLOTS; i++){
+      if(now[i] === this.prev[i]) continue;
+      this.prev[i] = now[i];
+
+      /* rebinding: the first slot pressed claims the armed lane */
+      if(Binds.armed !== null){
+        if(now[i] && i !== this.START) Binds.takePad(i);
+        continue;
+      }
+      if(i === this.START){
+        if(now[i]) this.startButton();
+        continue;
+      }
+      const lane = this.BTN[i];
+      if(lane === undefined) continue;
+      if(now[i]){ this.refs[lane]++; Input.down(lane); }
+      else if(this.refs[lane] > 0){ this.refs[lane]--; Input.up(lane); }
+    }
+  },
+
+  /** Start/Options: play from the menu, pause in-song, retry on the summary. */
+  startButton(){
+    if(PadUI.visible){ PadUI.hide(); return; }
+    if(G.state === 'menu') $('btnDemo').click();
+    else if(G.state === 'over') Engine.restart();
+    else Engine.togglePause();
+  }
+};
+
+/* ==========================================================================
+   MODULE: PadUI — console-style controller detection screen
+   ========================================================================== */
+const PadUI = {
+  visible:false, timer:null, cells:[], pills:[], slots:[], rows:[], SLOTS:4,
+
+  init(){
+    const slotWrap = $('padSlots');
+    for(let i = 0; i < this.SLOTS; i++){
+      const d = document.createElement('div');
+      d.className = 'slot';
+      d.innerHTML = '<span class="dot"></span><span class="num">P' + (i + 1) +
+                    '</span><span class="who">Empty</span><span class="meta"></span>';
+      slotWrap.appendChild(d);
+      this.slots.push({ root:d, who:d.querySelector('.who'), meta:d.querySelector('.meta') });
+    }
+
+    const laneWrap = $('padLanes');
+    for(let i = 0; i < 5; i++){
+      const hex = '#' + LANE_COLORS[i].toString(16).padStart(6, '0');
+      const d = document.createElement('div');
+      d.className = 'lanePill';
+      d.style.borderColor = hex;
+      d.style.color = hex;
+      d.innerHTML = 'L' + (i + 1) + '<small>' + Binds.keyLabel(Binds.keys[i]) + '</small>';
+      laneWrap.appendChild(d);
+      this.pills.push(d);
+    }
+
+    /* one rebind row per lane */
+    const bindWrap = $('bindRows');
+    for(let i = 0; i < 5; i++){
+      const hex = '#' + LANE_COLORS[i].toString(16).padStart(6, '0');
+      const row = document.createElement('div');
+      row.className = 'bindRow';
+      row.innerHTML =
+        '<span class="lane" style="color:' + hex + '">L' + (i + 1) + '</span>' +
+        '<span class="chip key"></span>' +
+        '<span class="chip pad"></span>' +
+        '<button>Rebind</button>';
+      const btn = row.querySelector('button');
+      btn.onclick = () => (Binds.armed === i ? Binds.cancel() : Binds.arm(i));
+      bindWrap.appendChild(row);
+      this.rows.push({ root:row, key:row.querySelector('.key'), pad:row.querySelector('.pad'), btn:btn });
+    }
+
+    $('btnPad').onclick = () => this.show();
+    $('padDone').onclick = () => this.hide();
+    $('padRumble').onclick = () => this.rumble();
+    for(const b of elPadScreen.querySelectorAll('[data-preset]'))
+      b.onclick = () => Binds.preset(b.dataset.preset);
+
+    $('padMap').innerHTML =
+      'Hit <b>Rebind</b> on a lane, then press the key or controller button you want &mdash; ' +
+      'it binds immediately. Taking an input already used by another lane frees it there. ' +
+      '<kbd>Esc</kbd> cancels.<br>' +
+      'Stick and d-pad directions bind like buttons. <b>Start</b> plays the demo from the menu, ' +
+      'pauses in a song, retries on the summary. Bindings are saved in this browser.<br>' +
+      'Binding a lane to <kbd>R</kbd> shadows the restart shortcut &mdash; the Encore button still works. ' +
+      '<kbd>Esc</kbd> stays reserved for pause and cancel.';
+
+    this.refreshBinds();
+  },
+
+  show(){
+    this.visible = true;
+    Engine.show(elPadScreen);
+    if(!this.timer) this.timer = setInterval(() => this.refresh(), 50);
+    this.refresh();
+  },
+
+  hide(){
+    this.visible = false;
+    if(this.timer){ clearInterval(this.timer); this.timer = null; }
+    Input.clear();
+    Engine.show(elMenu);
+  },
+
+  rumble(){
+    const pads = Pad.list();
+    let done = false;
+    for(const pad of pads){
+      const act = pad.vibrationActuator;
+      if(act && act.playEffect){
+        act.playEffect('dual-rumble', { duration:420, strongMagnitude:1, weakMagnitude:0.6 });
+        done = true;
+      }
+    }
+    const b = $('padRumble');
+    b.textContent = done ? 'Rumbling!' : (pads.length ? 'No Rumble Support' : 'No Controller');
+    setTimeout(() => { b.textContent = 'Test Rumble'; }, 1200);
+  },
+
+  /** Repaint the binding rows: current key, current pad slot, armed state. */
+  refreshBinds(){
+    for(let i = 0; i < this.rows.length; i++){
+      const r = this.rows[i];
+      const arming = Binds.armed === i;
+      const k = Binds.keys[i], pd = Binds.pads[i];
+      r.root.classList.toggle('arming', arming);
+      r.btn.textContent = arming ? 'Listening' : 'Rebind';
+      if(arming){
+        r.key.innerHTML = '<span class="tag">Key</span>Press any key&hellip;';
+        r.pad.innerHTML = '<span class="tag">Pad</span>or any button&hellip;';
+        r.key.classList.remove('none');
+        r.pad.classList.remove('none');
+      } else {
+        r.key.innerHTML = '<span class="tag">Key</span>' + Binds.keyLabel(k);
+        r.pad.innerHTML = '<span class="tag">Pad</span>' + Binds.padLabel(pd);
+        r.key.classList.toggle('none', !k);
+        r.pad.classList.toggle('none', pd === null || pd === undefined);
+      }
+    }
+  },
+
+  refresh(){
+    const pads = Pad.detect();
+    if(!Pad.timer) Pad.poll();          // keep lane state live before the first connect
+
+    /* device bays */
+    for(let i = 0; i < this.SLOTS; i++){
+      const s = this.slots[i], pad = pads[i];
+      if(pad){
+        s.root.classList.add('live');
+        s.who.textContent = String(pad.id).replace(/\s*\([^)]*\)\s*$/, '').trim() || 'Gamepad';
+        s.meta.textContent = (pad.mapping === 'standard' ? 'STANDARD' : 'RAW') +
+                             ' \u00b7 ' + pad.buttons.length + ' BTN \u00b7 ' + pad.axes.length + ' AXIS';
+      } else {
+        s.root.classList.remove('live');
+        s.who.textContent = 'Empty';
+        s.meta.textContent = '';
+      }
+    }
+    $('padPrompt').innerHTML = Binds.armed !== null
+      ? '<b>Listening for lane ' + (Binds.armed + 1) + '</b> &mdash; press the key or button you want. Esc cancels.'
+      : (pads.length
+        ? 'Ready. Press your inputs &mdash; the lanes below light up. Wrong lane lighting up? Rebind it in Input Bindings.'
+        : 'No controller detected &mdash; plug one in and <b>press any button on it</b>. Browsers hide gamepads until a button is pressed.');
+
+    /* lane pills */
+    for(let i = 0; i < 5; i++){
+      const lit = G.held[i] || Pad.refs[i] > 0;
+      this.pills[i].classList.toggle('lit', !!lit);
+      this.pills[i].style.background = lit ? this.pills[i].style.color : 'rgba(6,10,17,.6)';
+    }
+
+    /* raw slot grid for the first pad: buttons, then the stick / hat slots */
+    const pad = pads[0];
+    const btnCount = pad ? Math.min(pad.buttons.length, 24) : 0;
+    const live = Pad.now_;
+    const wrap = $('padRaw');
+    const total = pad ? btnCount + 4 : 0;
+    while(this.cells.length < total){
+      const c = document.createElement('div');
+      c.className = 'btnCell';
+      wrap.appendChild(c);
+      this.cells.push(c);
+    }
+    for(let i = 0; i < this.cells.length; i++){
+      const c = this.cells[i];
+      if(i >= total){ c.style.display = 'none'; continue; }
+      c.style.display = '';
+      const slot = i < btnCount ? i : PAD_AXIS + (i - btnCount);
+      const name = i < btnCount ? String(slot) : ['\u2191', '\u2193', '\u2190', '\u2192'][i - btnCount];
+      const lane = Pad.BTN[slot];
+      c.textContent = lane !== undefined ? (name + '\u2192' + (lane + 1)) : name;
+      c.classList.toggle('lit', !!live[slot]);
+      c.classList.toggle('mapped', lane !== undefined);
+    }
+
+    let ax = '';
+    if(pad) for(let i = 0; i < pad.axes.length; i++)
+      ax += 'AXIS ' + i + ': ' + pad.axes[i].toFixed(2).padStart(5, ' ') + '   ';
+    $('padAxes').textContent = ax;
+  }
+};
+
+/* ==========================================================================
+   MODULE: Engine — state machine, scoring, game loop
+   ========================================================================== */
+const Engine = {
+  last:0, dt:0, clock:0, lastBeat:-1,
+
+  boot(){
+    Binds.load();
+    Highway.initTextures();
+    World.init();
+    Highway.init();
+    Input.init();
+    Pad.init();
+    PadUI.init();
+    Binds.apply();
+    this.bindUI();
+    this.last = performance.now();
+    requestAnimationFrame(this.loop.bind(this));
+  },
+
+  /* ------------------------------- UI ------------------------------------ */
+  bindUI(){
+    $('btnDemo').onclick = () => this.start('demo');
+    $('btnPick').onclick = () => $('file').click();
+    $('drop').onclick = () => $('file').click();
+    $('file').onchange = e => { if(e.target.files[0]) this.loadFile(e.target.files[0]); };
+
+    const drop = $('drop');
+    ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => {
+      e.preventDefault(); drop.classList.add('over');
+    }));
+    ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => {
+      e.preventDefault(); drop.classList.remove('over');
+    }));
+    drop.addEventListener('drop', e => {
+      const f = e.dataTransfer.files[0];
+      if(f) this.loadFile(f);
+    });
+    // block the browser from navigating on a stray drop
+    ['dragover','drop'].forEach(ev => addEventListener(ev, e => e.preventDefault()));
+
+    $('diffRow').onclick = e => {
+      const b = e.target.closest('button'); if(!b) return;
+      G.diff = b.dataset.diff;
+      [...$('diffRow').children].forEach(c => c.classList.toggle('sel', c === b));
+    };
+    [...$('qualRow').children].forEach(c => c.classList.toggle('sel', c.dataset.qual === QNAME));
+    $('qualRow').onclick = e => {
+      const b = e.target.closest('button'); if(!b) return;
+      if(b.dataset.qual === QNAME) return;
+      try { localStorage.setItem('rockgoofy.quality', b.dataset.qual); } catch(err){}
+      location.reload();
+    };
+    $('schemeRow').onclick = e => {
+      const b = e.target.closest('button'); if(!b) return;
+      Input.setScheme(b.dataset.scheme);
+      [...$('schemeRow').children].forEach(c => c.classList.toggle('sel', c === b));
+    };
+    $('offset').oninput = e => {
+      G.syncOffset = (+e.target.value) / 1000;
+      $('offsetVal').textContent = e.target.value + ' ms';
+    };
+    $('btnAgain').onclick = () => this.restart();
+    $('btnMenu').onclick = () => this.toMenu();
+  },
+
+  show(el){
+    [elMenu, elLoading, elResult, elPadScreen].forEach(s => s.classList.add('hidden'));
+    if(el) el.classList.remove('hidden');
+  },
+
+  toMenu(){
+    Audio_.stop();
+    G.state = 'menu';
+    elHud.classList.remove('on');
+    elRage.classList.remove('on');
+    elPause.classList.add('hidden');
+    this.show(elMenu);
+  },
+
+  /* --------------------------- load / analyze --------------------------- */
+  async loadFile(file){
+    G.fileName = file.name;
+    $('filename').textContent = '▸ ' + file.name;
+    this.show(elLoading);
+    G.state = 'loading';
+    elLoadTxt.textContent = 'Decoding ' + file.name;
+    elBar.style.width = '4%';
+    try {
+      const buf = await Audio_.decodeFile(file);
+      await this.prepare(buf, file.name);
+    } catch(err){
+      elLoadTxt.textContent = (err && err.message) || 'Decode failed';
+      elBar.style.width = '0%';
+      setTimeout(() => this.toMenu(), 2200);
+    }
+  },
+
+  async start(kind){
+    this.show(elLoading);
+    G.state = 'loading';
+    if(kind === 'demo'){
+      elLoadTxt.textContent = 'Synthesizing thrash riff';
+      elBar.style.width = '6%';
+      // yield a frame so the loading screen actually paints
+      await new Promise(r => setTimeout(r, 30));
+      Audio_.init();
+      const buf = await Synth.render();
+      G.fileName = 'Built-in Demo Riff';
+      await this.prepare(buf, G.fileName);
+    }
+  },
+
+  async prepare(buffer, name){
+    G.buffer = buffer;
+    G.songLen = buffer.duration;
+    elLoadTxt.textContent = 'Analyzing 5 frequency bands';
+
+    const scan = await Analyzer.scan(buffer, p => {
+      elBar.style.width = (8 + p * 78).toFixed(1) + '%';
+    });
+
+    elLoadTxt.textContent = 'Building note chart';
+    elBar.style.width = '92%';
+    await new Promise(r => setTimeout(r, 16));
+
+    let chart = Analyzer.buildChart(scan, G.diff);
+    if(chart.length < 8) chart = this.fallbackChart(buffer.duration);   // near-silent input
+    G.chart = chart;
+    G.env = Analyzer.envelope(scan);
+
+    elBar.style.width = '100%';
+    elLoadTxt.textContent = chart.length + ' notes charted — go!';
+    await new Promise(r => setTimeout(r, 260));
+    this.play();
+  },
+
+  /** Straight 8th-note chart so the game is never unplayable. */
+  fallbackChart(dur){
+    const D = DIFF[G.diff], out = [];
+    const step = Math.max(D.gap, 0.30);
+    const walk = [0, 2, 4, 1, 3, 2, 0, 3, 1, 4];
+    for(let t = 1.2, i = 0; t < dur - 0.5; t += step, i++){
+      const lane = walk[i % walk.length];
+      out.push({ time:t, lane, duration:0, isSustain:false,
+                 hit:false, missed:false, holding:false, holdScored:0, holdEnd:0, broken:false });
+    }
+    return out;
+  },
+
+  /* ------------------------------- play --------------------------------- */
+  play(){
+    G.score = 0; G.combo = 0; G.best = 0; G.mult = 1; G.meter = 50;
+    G.counts.perfect = G.counts.great = G.counts.ok = G.counts.miss = 0;
+    G.judged = 0; G.windowStart = 0;
+    G.totalNotes = G.chart.length;
+    for(let i = 0; i < 5; i++){ G.activeSustain[i] = null; G.laneFlash[i] = 0; }
+    Input.clear();                 // a key held at song start must not kill its lane
+    for(const n of G.chart){
+      n.hit = false; n.missed = false; n.holding = false;
+      n.holdScored = 0; n.holdEnd = 0; n.broken = false;
+    }
+
+    const ctx = Audio_.init();
+    const lead = DIFF[G.diff].approach + 0.55;      // silence before the first note arrives
+    Audio_.play(G.buffer, ctx.currentTime + lead);
+    G.startAt = ctx.currentTime + lead;
+    G.state = 'play';
+
+    this.show(null);
+    elHud.classList.add('on');
+    this.updateHud();
+  },
+
+  restart(){
+    if(!G.buffer) return this.toMenu();
+    Audio_.stop();
+    elRage.classList.remove('on');
+    elPause.classList.add('hidden');
+    this.play();   // same buffer + same chart, fresh scoring state
+  },
+
+  togglePause(){
+    const ctx = Audio_.ctx;
+    if(!ctx) return;
+    if(G.state === 'play'){
+      G.state = 'paused';
+      G.pausedAtCtx = ctx.currentTime;
+      ctx.suspend();
+      elPause.classList.remove('hidden');
+    } else if(G.state === 'paused'){
+      G.state = 'play';
+      ctx.resume().then(() => {
+        // if the clock kept running while suspended, compensate
+        G.startAt += Math.max(0, ctx.currentTime - G.pausedAtCtx);
+      });
+      elPause.classList.add('hidden');
+    }
+  },
+
+  /* ------------------------------ scoring ------------------------------- */
+
+  /** Song position sampled right now — a frame-old G.songTime costs up to
+      16 ms of timing error on every hit. */
+  now(){ return Audio_.ctx.currentTime - G.startAt + G.syncOffset; },
+
+  onPress(lane){
+    const now = this.now();
+    const chart = G.chart;
+    const W = DIFF[G.diff].window;
+    const winOk = WIN_OK * W;
+    let bestIdx = -1, bestAbs = 1e9;
+
+    for(let i = G.windowStart; i < chart.length; i++){
+      const n = chart[i];
+      if(n.time - now > winOk) break;
+      if(n.lane !== lane || n.hit || n.missed) continue;
+      const a = Math.abs(n.time - now);
+      if(a <= winOk && a < bestAbs){ bestAbs = a; bestIdx = i; }
+    }
+
+    if(bestIdx < 0){
+      G.laneFlash[lane] = Math.max(G.laneFlash[lane], 0.35);
+      return;   // stray press: no penalty, just no reward
+    }
+
+    const n = chart[bestIdx];
+    n.hit = true;
+    G.judged++;
+
+    let pts, meter, label, color;
+    if(bestAbs <= WIN_PERFECT * W){ pts=100; meter=4; label='PERFECT'; color='#f2f4f3'; G.counts.perfect++; }
+    else if(bestAbs <= WIN_GREAT * W){ pts=50; meter=2; label='GREAT'; color='#00d2ff'; G.counts.great++; }
+    else { pts=25; meter=1; label='OK'; color='#e5a93b'; G.counts.ok++; }
+
+    G.combo++;
+    if(G.combo > G.best) G.best = G.combo;
+    this.setMult();
+    G.score += pts * G.mult;
+    this.addMeter(meter);
+    this.judge(label, color);
+
+    G.laneFlash[lane] = 1;
+    Highway.burst(lane, bestAbs <= WIN_PERFECT ? 12 : 7, LANE_COLORS[lane]);
+    if(lane === 0) this.flash(0.14);
+
+    if(n.isSustain && n.duration > 0){
+      n.holding = true;
+      n.holdEnd = n.time + n.duration;
+      G.activeSustain[lane] = n;
+    }
+    G.hudDirty = true;
+  },
+
+  onRelease(lane){
+    const n = G.activeSustain[lane];
+    if(!n) return;
+    const now = this.now();
+    const done = (now - n.time) / n.duration;
+    n.holding = false;
+    if(done < 0.8){
+      n.broken = true;
+      G.combo = 0; this.setMult();
+      this.addMeter(-1 * DIFF[G.diff].drain);
+      this.judge('HOLD BROKEN', '#ba1200');
+    }
+    G.activeSustain[lane] = null;
+    G.hudDirty = true;
+  },
+
+  setMult(){
+    G.mult = G.combo >= 30 ? 4 : G.combo >= 20 ? 3 : G.combo >= 10 ? 2 : 1;
+    elRage.classList.toggle('on', G.mult >= 4);
+  },
+
+  addMeter(d){
+    G.meter = Math.max(0, Math.min(100, G.meter + d));
+    if(G.meter <= 0 && G.state === 'play') this.fail();
+  },
+
+  judge(text, color){ G.judgeText = text; G.judgeColor = color; },
+
+  /** One DOM/layout pass per frame instead of one per note hit. */
+  flushHud(){
+    if(G.judgeText){
+      elJudge.textContent = G.judgeText;
+      elJudge.style.color = G.judgeColor;
+      elJudge.style.textShadow = '0 0 26px ' + G.judgeColor + ',0 5px 0 #06090f';
+      elJudge.classList.remove('pop');
+      void elJudge.offsetWidth;    // forced reflow restarts the keyframes
+      elJudge.classList.add('pop');
+      G.judgeText = null;
+    }
+    if(G.hudDirty){ this.updateHud(); G.hudDirty = false; }
+  },
+
+  flash(a){
+    G.flashAlpha = Math.max(G.flashAlpha, a);
+    G.strobe = Math.max(G.strobe, a * 5);
+  },
+
+  updateHud(){
+    elScore.textContent = G.score.toLocaleString('en-US');
+    elCombo.textContent = G.combo;
+    elMult.textContent = G.mult + 'x';
+    elMeter.style.height = G.meter + '%';
+    elMeterWrap.classList.toggle('danger', G.meter < 25);
+    const hits = G.counts.perfect + G.counts.great + G.counts.ok;
+    const acc = G.judged ? Math.round((G.counts.perfect + G.counts.great * 0.7 + G.counts.ok * 0.4) / G.judged * 100) : 100;
+    elAcc.textContent = acc + '%';
+    elNotesLeft.textContent = hits + ' / ' + G.totalNotes + ' notes';
+  },
+
+  /* ------------------------- per-frame gameplay -------------------------- */
+  tick(){
+    const now = G.songTime;
+    const chart = G.chart;
+
+    /* misses */
+    const D = DIFF[G.diff];
+    const missAfter = now - WIN_OK * D.window;
+    for(let i = G.windowStart; i < chart.length; i++){
+      const n = chart[i];
+      if(n.time > missAfter) break;
+      if(n.hit || n.missed) continue;
+      n.missed = true;
+      G.judged++; G.counts.miss++;
+      G.combo = 0; this.setMult();
+      this.addMeter(-6 * D.drain);
+      this.judge('MISS', '#ba1200');
+      G.hudDirty = true;
+    }
+
+    /* sustain hold scoring: +5 pts per 50 ms held */
+    for(let l = 0; l < 5; l++){
+      const n = G.activeSustain[l];
+      if(!n) continue;
+      if(!G.held[l]){ this.onRelease(l); continue; }
+      if(now >= n.holdEnd){
+        n.holding = false;
+        G.activeSustain[l] = null;
+        Highway.burst(l, 10, LANE_COLORS[l]);
+        this.judge('HELD!', '#f2f4f3');
+        G.hudDirty = true;
+        continue;
+      }
+      const elapsed = now - n.time;
+      const ticks = Math.floor(elapsed / 0.05);
+      if(ticks > n.holdScored){
+        G.score += (ticks - n.holdScored) * 5 * G.mult;
+        n.holdScored = ticks;
+        if(ticks % 4 === 0) Highway.burst(l, 2, LANE_COLORS[l]);
+        G.hudDirty = true;
+      }
+      G.laneFlash[l] = Math.max(G.laneFlash[l], 0.6);
+    }
+
+    /* envelope-driven visuals */
+    if(G.env){
+      const idx = Math.max(0, Math.min(G.env[0].length - 1, Math.floor(now * 60)));
+      const bass = G.env[0][idx], mid = G.env[2][idx], hi = G.env[4][idx];
+      G.bassLevel += (bass - G.bassLevel) * 0.28;
+      G.midLevel  += ((mid + hi) * 0.5 - G.midLevel) * 0.22;
+      if(bass > 0.82) G.strobe = 1;
+      for(let b = 0; b < 5; b++)
+        G.bands[b] += (G.env[b][idx] - G.bands[b]) * 0.35;
+      /* rising edges only: a sustained loud band must not pin an arm down */
+      const top = (mid + hi) * 0.5;
+      if(bass - G.bassPrev > 0.16) G.kick = 1;
+      if(top - G.midPrev > 0.14) G.snare = 1;
+      G.bassPrev = bass;
+      G.midPrev = top;
+    }
+
+    if(G.mult >= 4 && !G.pyroFired){ G.pyroFired = true; World.pyro(); }
+    else if(G.mult < 4) G.pyroFired = false;
+
+    /* song end */
+    if(now > G.songLen + 0.6) this.finish(true);
+  },
+
+  fail(){
+    G.state = 'over';
+    Audio_.stop();
+    Audio_.boo();
+    elHud.classList.remove('on');
+    elRage.classList.remove('on');
+    $('resTitle').textContent = 'Song Failed';
+    $('resTitle').style.color = '#ba1200';
+    $('resTitle').style.textShadow = '0 0 34px #ba1200,0 8px 0 #06090f';
+    $('resSub').textContent = 'The Crowd Boos';
+    this.fillResults();
+    this.show(elResult);
+  },
+
+  finish(){
+    G.state = 'over';
+    Audio_.stop();
+    Audio_.cheer();
+    World.confetti();
+    elHud.classList.remove('on');
+    elRage.classList.remove('on');
+    const acc = G.judged ? (G.counts.perfect + G.counts.great * 0.7 + G.counts.ok * 0.4) / G.judged : 1;
+    $('resTitle').textContent = acc > 0.92 ? 'Encore Earned' : 'Song Complete';
+    $('resTitle').style.color = '#f2f4f3';
+    $('resTitle').style.textShadow = '4px 0 0 #ba1200,0 0 26px rgba(242,244,243,.4),0 8px 0 #06090f';
+    $('resSub').textContent = G.fileName + ' — ' + G.diff.toUpperCase();
+    this.fillResults();
+    this.show(elResult);
+  },
+
+  fillResults(){
+    const hits = G.counts.perfect + G.counts.great + G.counts.ok;
+    const acc = G.judged ? Math.round((G.counts.perfect + G.counts.great * 0.7 + G.counts.ok * 0.4) / G.judged * 100) : 0;
+    $('rScore').textContent = G.score.toLocaleString('en-US');
+    $('rAcc').textContent = acc + '%';
+    $('rStreak').textContent = G.best;
+    $('rHit').textContent = hits + ' / ' + G.totalNotes;
+    $('rPerfect').textContent = G.counts.perfect;
+    $('rGreat').textContent = G.counts.great;
+    $('rOk').textContent = G.counts.ok;
+    $('rMiss').textContent = G.counts.miss;
+  },
+
+  /* ------------------------------ main loop ----------------------------- */
+  loop(ms){
+    requestAnimationFrame(this.loop.bind(this));
+    const dt = Math.min(0.05, (ms - this.last) / 1000);
+    this.last = ms;
+    this.dt = dt;
+    this.clock += dt;
+
+    if(G.state === 'play'){
+      G.songTime = Audio_.ctx.currentTime - G.startAt + G.syncOffset;
+      this.tick();
+    } else if(G.state === 'menu'){
+      // idle stage animation energy
+      G.bassLevel += (0.35 + Math.sin(this.clock * 3.2) * 0.3 - G.bassLevel) * 0.1;
+      G.midLevel  += (0.45 - G.midLevel) * 0.1;
+      for(let b = 0; b < 5; b++)
+        G.bands[b] = 0.25 + 0.5 * Math.abs(Math.sin(this.clock * (1.6 + b * 0.7) + b));
+      // keep the band playing on the menu so the stage is never frozen
+      const beat = this.clock * 2.6;
+      if(Math.floor(beat) !== this.lastBeat){
+        this.lastBeat = Math.floor(beat);
+        if(this.lastBeat % 2 === 0) G.kick = 1; else G.snare = 1;
+        if(this.lastBeat % 4 === 0) G.strobe = 1;
+      }
+    }
+
+    /* decays */
+    G.strobe = Math.max(0, G.strobe - dt * 6);
+    G.kick  = Math.max(0, G.kick  - dt * 5.5);
+    G.snare = Math.max(0, G.snare - dt * 6.5);
+    if(G.flashAlpha > 0.002){
+      G.flashAlpha *= 0.82;
+      elFlash.style.opacity = G.flashAlpha.toFixed(3);
+    } else if(G.flashAlpha !== 0){
+      G.flashAlpha = 0;
+      elFlash.style.opacity = '0';
+    }
+    for(let i = 0; i < 5; i++) G.laneFlash[i] = Math.max(0, G.laneFlash[i] - dt * 3.4);
+
+    this.flushHud();
+    World.update(this.clock, dt);
+    if(G.state === 'play' || G.state === 'paused') Highway.draw(G.songTime, this.clock);
+    else Highway.draw(-999, this.clock);
+    World.render();
+  }
+};
+
+/* ------------------------------ ignition ---------------------------------- */
+if(!window.THREE){
+  document.body.innerHTML =
+    '<div style="padding:40px;font:16px sans-serif;color:#f2f4f3;background:#0d1321">' +
+    'Three.js failed to load from the CDN. Reconnect and reload.</div>';
+} else {
+  Engine.boot();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,4316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>TORNADO-HOLIC — Storm Extraction</title>
+<style>
+  :root {
+    --cyan: #4fe3ff;
+    --amber: #ffb648;
+    --green: #3ff08a;
+    --red: #ff4d4d;
+    --slate: #2c3e50;
+    --panel: rgba(7, 16, 22, 0.72);
+    --edge: rgba(79, 227, 255, 0.35);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #10161c; }
+  body {
+    font-family: "Courier New", ui-monospace, monospace;
+    color: #cfe9f5;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+  canvas { display: block; }
+  #scene { position: fixed; inset: 0; }
+
+  /* ---------- lightning / damage flashes ---------- */
+  #flash {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0;
+    background: #dbeaff; mix-blend-mode: screen; transition: opacity 60ms linear; z-index: 5;
+  }
+  #dmgFlash {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 6;
+    box-shadow: inset 0 0 160px 40px rgba(255, 40, 40, 0.75);
+    transition: opacity 160ms ease-out;
+  }
+  #vignette {
+    position: fixed; inset: 0; pointer-events: none; z-index: 4;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+  }
+  #scanlines {
+    position: fixed; inset: 0; pointer-events: none; z-index: 7; opacity: 0.16;
+    background: repeating-linear-gradient(to bottom, rgba(255,255,255,0.10) 0 1px, rgba(0,0,0,0) 1px 3px);
+  }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; z-index: 8; pointer-events: none; transition: opacity 260ms ease; }
+  #hud.dim { opacity: 0; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    clip-path: polygon(0 9px, 9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+    backdrop-filter: blur(3px);
+    box-shadow: 0 0 22px rgba(0, 0, 0, 0.45), inset 0 0 24px rgba(79, 227, 255, 0.05);
+  }
+  .label {
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: rgba(207, 233, 245, 0.62);
+  }
+  .val { font-size: 13px; letter-spacing: 1px; color: var(--cyan); text-shadow: 0 0 8px rgba(79,227,255,.5); }
+
+  /* top bar */
+  #topBar {
+    position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+    width: min(720px, calc(100% - 380px)); min-width: 420px;
+    padding: 10px 14px; display: grid; grid-template-columns: 1fr auto; gap: 6px 18px;
+  }
+  #dataRow { grid-column: 1 / 2; }
+  .bar {
+    position: relative; height: 12px; margin-top: 5px;
+    background: rgba(3, 10, 14, 0.85); border: 1px solid rgba(79, 227, 255, 0.28);
+    overflow: hidden;
+  }
+  .bar > .fill {
+    position: absolute; inset: 0 100% 0 0; width: 0%;
+    background: linear-gradient(90deg, #1d6fa8, var(--cyan));
+    box-shadow: 0 0 14px rgba(79, 227, 255, 0.55);
+    transition: width 120ms linear;
+  }
+  .bar > .ticks {
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, rgba(0,0,0,0.45) 0 1px, rgba(0,0,0,0) 1px 10%);
+  }
+  #rightStack { grid-column: 2 / 3; text-align: right; }
+  #efPips { display: flex; gap: 4px; justify-content: flex-end; margin-top: 5px; }
+  .pip {
+    width: 26px; height: 10px; background: rgba(3, 10, 14, 0.85);
+    border: 1px solid rgba(255, 182, 72, 0.35);
+  }
+  .pip.on { background: var(--amber); box-shadow: 0 0 10px rgba(255, 182, 72, 0.7); }
+  .pip.max { background: var(--red); box-shadow: 0 0 12px rgba(255, 77, 77, 0.8); border-color: rgba(255,77,77,.5); }
+
+  /* bottom left */
+  #blPanel { position: absolute; left: 14px; bottom: 14px; width: 268px; padding: 11px 13px; }
+  #hullBar > .fill { background: linear-gradient(90deg, #1f9c5b, var(--green)); box-shadow: 0 0 14px rgba(63,240,138,.55); }
+  #hullBar.warn > .fill { background: linear-gradient(90deg, #b06a10, var(--amber)); box-shadow: 0 0 14px rgba(255,182,72,.6); }
+  #hullBar.crit > .fill { background: linear-gradient(90deg, #8e1414, var(--red)); box-shadow: 0 0 16px rgba(255,77,77,.7); }
+  #anchorRow { margin-top: 9px; display: flex; align-items: center; gap: 8px; }
+  #anchorTag { font-size: 12px; letter-spacing: 2px; padding: 3px 8px; border: 1px solid var(--cyan); color: var(--cyan); }
+  #anchorTag.locked { border-color: var(--red); color: var(--red); background: rgba(255, 77, 77, 0.12); animation: blink 0.9s steps(2, end) infinite; }
+  #anchorTag.stunned { border-color: var(--amber); color: var(--amber); background: rgba(255, 182, 72, 0.14); animation: blink 0.45s steps(2, end) infinite; }
+  #anchorCharge {
+    position: relative; height: 6px; margin-top: 7px;
+    background: rgba(3, 10, 14, 0.85); border: 1px solid rgba(79, 227, 255, 0.28);
+  }
+  #anchorCharge > .fill {
+    position: absolute; inset: 0 100% 0 0; width: 100%;
+    background: linear-gradient(90deg, #1d6fa8, var(--cyan)); box-shadow: 0 0 10px rgba(79,227,255,.5);
+    transition: width 90ms linear;
+  }
+  #anchorCharge.low > .fill { background: linear-gradient(90deg, #8e1414, var(--red)); }
+  @keyframes blink { 50% { opacity: 0.45; } }
+
+  /* bottom right */
+  #brPanel { position: absolute; right: 14px; bottom: 14px; width: 274px; padding: 11px 13px; }
+  #probeDots { display: flex; gap: 6px; margin-top: 6px; }
+  .pdot { width: 30px; height: 12px; border: 1px solid rgba(79, 227, 255, 0.45); background: rgba(3,10,14,.8); }
+  .pdot.has { background: var(--cyan); box-shadow: 0 0 10px rgba(79,227,255,.65); }
+  .pdot.live { background: #0d7f9c; border-color: #7ff; }
+  #hints { margin-top: 10px; font-size: 10.5px; line-height: 1.7; color: rgba(207,233,245,.7); letter-spacing: .5px; }
+  #hints b { color: var(--amber); font-weight: normal; }
+  #statusLine { margin-top: 8px; font-size: 11px; letter-spacing: 1px; color: var(--amber); min-height: 14px; }
+
+  /* minimap */
+  #mmWrap { position: absolute; left: 14px; top: 14px; padding: 8px; }
+  #minimap { display: block; border-radius: 2px; }
+  #mmLabel { display: flex; justify-content: space-between; font-size: 9px; letter-spacing: 2px; color: rgba(207,233,245,.55); margin-bottom: 5px; }
+
+  /* ---------- modal screens ---------- */
+  /* Centring with "align-items: center" on a scrollable flex box pushes any
+     overflow half above the viewport, where it cannot be scrolled to. Auto
+     margins centre the card when it fits and collapse to zero when it does
+     not, so the action buttons below it are always reachable. */
+  #screen {
+    position: fixed; inset: 0; z-index: 20; display: none;
+    overflow-y: auto; padding: 16px 20px;
+    background: radial-gradient(ellipse at center, rgba(12, 22, 30, 0.82), rgba(4, 8, 12, 0.95));
+  }
+  #screen.show { display: flex; }
+  /* On a short window the briefing copy alone is taller than the viewport, and
+     a centred card then pushes START MISSION off screen. The card becomes a
+     flex column capped to the viewport: the title, the map/risk chips and the
+     action row stay pinned while only the prose scrolls. */
+  #card {
+    margin: auto; flex: none;
+    display: flex; flex-direction: column;
+    max-height: calc(100vh - 32px);
+    width: min(560px, calc(100% - 40px)); padding: 22px 30px; text-align: center;
+    background: rgba(7, 16, 22, 0.9); border: 1px solid var(--edge);
+    clip-path: polygon(0 14px, 14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.7), inset 0 0 40px rgba(79, 227, 255, 0.05);
+  }
+  #title { font-size: 30px; letter-spacing: 5px; color: var(--cyan); text-shadow: 0 0 22px rgba(79,227,255,.55); }
+  #subtitle { font-size: 11px; letter-spacing: 4px; color: rgba(207,233,245,.6); margin-top: 6px; }
+  #bigTitle { font-size: 13px; letter-spacing: 3px; margin: 12px 0 13px; text-transform: uppercase; }
+  #cardBody {
+    font-size: 12px; line-height: 1.7; color: rgba(207,233,245,.82); text-align: left;
+    flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+    padding-right: 4px; scrollbar-width: thin; scrollbar-color: rgba(79,227,255,.45) transparent;
+  }
+  #cardBody::-webkit-scrollbar { width: 6px; }
+  #cardBody::-webkit-scrollbar-thumb { background: rgba(79,227,255,.4); }
+  #cardBody .k { color: var(--amber); }
+  #stats { margin: 13px 0 2px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .stat { border: 1px solid rgba(79,227,255,.22); padding: 8px 6px; background: rgba(3, 10, 14, 0.6); }
+  .stat .sv { font-size: 18px; color: var(--cyan); text-shadow: 0 0 10px rgba(79,227,255,.5); }
+  .stat .sl { font-size: 9px; letter-spacing: 1.5px; color: rgba(207,233,245,.55); margin-top: 2px; }
+  #btn {
+    pointer-events: auto; cursor: pointer; margin-top: 20px; display: inline-block;
+    padding: 11px 30px; font-family: inherit; font-size: 13px; letter-spacing: 3px;
+    color: #06131a; background: var(--cyan); border: none;
+    clip-path: polygon(0 8px, 8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+    box-shadow: 0 0 22px rgba(79,227,255,.45); transition: transform 90ms ease, filter 90ms ease;
+  }
+  #btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  #btn:active { transform: translateY(1px); }
+  #fatal { display: none; padding: 20px; font-size: 13px; line-height: 1.7; color: var(--red); }
+
+  /* map + risk selectors */
+  #setup { margin: 14px 0 2px; }
+  .setupRow { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+  .setupRow .slabel { font-size: 9px; letter-spacing: 2px; color: rgba(207,233,245,.5); width: 34px; text-align: right; }
+  .chip {
+    pointer-events: auto; cursor: pointer; font-family: inherit; font-size: 10px; letter-spacing: 1.6px;
+    padding: 6px 11px; color: rgba(207,233,245,.75); background: rgba(3, 10, 14, 0.7);
+    border: 1px solid rgba(79,227,255,.26); transition: border-color 90ms, color 90ms, background 90ms;
+  }
+  .chip:hover { border-color: var(--cyan); color: var(--cyan); }
+  .chip.sel { background: rgba(79,227,255,.15); border-color: var(--cyan); color: var(--cyan); box-shadow: 0 0 12px rgba(79,227,255,.22); }
+  #setupDesc {
+    margin: 10px auto 0; max-width: 420px; font-size: 10.5px; line-height: 1.65;
+    color: rgba(207,233,245,.6); letter-spacing: .4px;
+  }
+  #setupDesc b { color: var(--amber); font-weight: normal; }
+
+  /* =======================================================================
+     LOADING SCREEN — pure CSS/SVG art so it animates even if three.js fails
+     ======================================================================= */
+  #loading {
+    position: fixed; inset: 0; z-index: 30; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    background:
+      radial-gradient(ellipse 120% 80% at 50% 118%, rgba(79,227,255,0.10), rgba(0,0,0,0) 60%),
+      radial-gradient(ellipse at 50% 40%, #16232e 0%, #0a1117 55%, #05090d 100%);
+    overflow: hidden;
+  }
+  #loading.show { display: flex; }
+  #loading.out { animation: ldOut 460ms ease-in forwards; }
+  @keyframes ldOut { to { opacity: 0; transform: scale(1.06); } }
+
+  /* drifting storm bands behind everything */
+  #loading::before {
+    content: ""; position: absolute; inset: -30%;
+    background: repeating-linear-gradient(
+      102deg, rgba(255,255,255,0.020) 0 2px, rgba(0,0,0,0) 2px 26px);
+    animation: ldBands 14s linear infinite;
+  }
+  @keyframes ldBands { to { transform: translate3d(-140px, 60px, 0); } }
+
+  /* ---- the funnel: stacked ellipses that sway out of phase ---- */
+  #ldStorm { position: relative; width: 260px; height: 210px; margin-bottom: 26px; }
+  #ldStorm > i {
+    position: absolute; left: 50%; display: block;
+    border: 1.5px solid rgba(79, 227, 255, 0.55);
+    border-radius: 50%;
+    box-shadow: 0 0 12px rgba(79, 227, 255, 0.28), inset 0 0 12px rgba(79, 227, 255, 0.10);
+    transform: translateX(-50%);
+    animation-name: ldSway; animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite; animation-direction: alternate;
+  }
+  @keyframes ldSway {
+    from { transform: translateX(-50%) translateX(-9px) scaleX(0.94); }
+    to   { transform: translateX(-50%) translateX(9px)  scaleX(1.06); }
+  }
+  /* the dust column the rings hang on */
+  #ldStorm::after {
+    content: ""; position: absolute; left: 50%; bottom: 0; width: 42%; height: 96%;
+    transform: translateX(-50%);
+    background: linear-gradient(to top, rgba(79,227,255,0.16), rgba(79,227,255,0.02) 60%, rgba(0,0,0,0));
+    filter: blur(7px);
+  }
+  #ldStorm > b {
+    position: absolute; left: 50%; bottom: 12px; width: 4px; height: 4px;
+    border-radius: 50%; background: var(--amber);
+    box-shadow: 0 0 7px rgba(255, 182, 72, 0.8);
+    animation-name: ldOrbit; animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  @keyframes ldOrbit {
+    from { transform: rotate(0deg)   translateX(30px) scale(1);   opacity: 1; }
+    to   { transform: rotate(360deg) translateX(30px) scale(1);   opacity: 1; }
+  }
+
+  /* ---- title ---- */
+  #ldKicker {
+    font-size: 10px; letter-spacing: 5px; color: rgba(207,233,245,0.45);
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  #ldTitle {
+    display: flex; gap: 1px; font-size: clamp(28px, 6.4vw, 54px); font-weight: bold;
+    letter-spacing: 4px; color: var(--cyan); line-height: 1;
+    text-shadow: 0 0 26px rgba(79,227,255,0.55), 0 0 70px rgba(79,227,255,0.22);
+    animation: ldFlicker 3.6s steps(1, end) infinite;
+  }
+  #ldTitle > span {
+    display: inline-block; opacity: 0;
+    animation: ldIn 520ms cubic-bezier(.2,.9,.3,1) forwards;
+    animation-delay: calc(var(--i) * 55ms);
+  }
+  @keyframes ldIn { from { opacity: 0; transform: translateY(16px) scale(.86); filter: blur(6px); }
+                    to   { opacity: 1; transform: none; filter: blur(0); } }
+  @keyframes ldFlicker { 0%,88%,100% { opacity: 1; } 89% { opacity: .35; } 91% { opacity: 1; }
+                         93% { opacity: .5; } 94% { opacity: 1; } }
+  #ldSub {
+    margin-top: 9px; font-size: 11px; letter-spacing: 7px; color: rgba(207,233,245,0.6);
+    text-transform: uppercase;
+  }
+  #ldSub b { color: var(--amber); font-weight: normal; }
+
+  /* ---- progress ---- */
+  #ldGauge { width: min(430px, calc(100vw - 46px)); margin-top: 30px; }
+  #ldBar { height: 13px; }
+  #ldBar > .fill { transition: width 160ms cubic-bezier(.3,1,.4,1); }
+  #ldBar > .fill::after {
+    content: ""; position: absolute; right: 0; top: 0; bottom: 0; width: 3px;
+    background: #eafcff; box-shadow: 0 0 12px 3px rgba(79,227,255,0.75);
+  }
+  #ldRow {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-top: 7px; font-size: 10px; letter-spacing: 2px;
+  }
+  #ldStage { color: rgba(207,233,245,0.72); text-transform: lowercase; }
+  #ldStage::before { content: "» "; color: var(--amber); }
+  #ldPct { color: var(--cyan); font-size: 12px; text-shadow: 0 0 8px rgba(79,227,255,.5); }
+  #ldTip {
+    margin-top: 22px; min-height: 30px; max-width: 430px; text-align: center;
+    font-size: 10.5px; line-height: 1.6; letter-spacing: .6px; color: rgba(207,233,245,0.52);
+  }
+  #ldTip b { color: var(--amber); font-weight: normal; }
+  #ldFoot {
+    position: absolute; bottom: 16px; left: 0; right: 0;
+    display: flex; justify-content: space-between; padding: 0 20px;
+    font-size: 9px; letter-spacing: 2px; color: rgba(207,233,245,0.28);
+  }
+  #ldFatal { display: none; margin-top: 18px; max-width: 460px; text-align: center;
+             font-size: 11px; line-height: 1.7; color: var(--red); }
+  #ldRetry {
+    display: none; pointer-events: auto; cursor: pointer; margin-top: 16px;
+    padding: 9px 26px; font-family: inherit; font-size: 12px; letter-spacing: 3px;
+    color: #06131a; background: var(--amber); border: none;
+    clip-path: polygon(0 8px, 8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  }
+  #loading.failed #ldFatal, #loading.failed #ldRetry { display: block; }
+  #loading.failed #ldStorm { animation: ldDead 1.2s ease-in forwards; }
+  @keyframes ldDead { to { opacity: .18; filter: grayscale(1); } }
+
+  /* =======================================================================
+     SCREENS: menu / help / settings content inside the shared #card
+     ======================================================================= */
+  #card.wide { width: min(620px, calc(100% - 40px)); }
+  #card.narrow { width: min(430px, calc(100% - 40px)); }
+  #brandMark { font-size: 9px; letter-spacing: 5px; color: var(--amber); opacity: .8; }
+  #bestLine {
+    margin: 14px 0 2px; font-size: 10px; letter-spacing: 2px;
+    color: rgba(207,233,245,0.55);
+  }
+  #bestLine b { color: var(--cyan); font-weight: normal; text-shadow: 0 0 8px rgba(79,227,255,.4); }
+  #bestLine i { color: var(--amber); font-style: normal; }
+  #actions { display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; margin-top: 18px; flex: none; }
+  #setup, #stats, #menuList, #opts, #bestLine, #title, #subtitle, #bigTitle, #brandMark { flex: none; }
+  #btnAlt {
+    pointer-events: auto; cursor: pointer; display: inline-block;
+    padding: 11px 22px; font-family: inherit; font-size: 12px; letter-spacing: 3px;
+    color: var(--cyan); background: rgba(79,227,255,0.07); border: 1px solid var(--edge);
+    clip-path: polygon(0 8px, 8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+    transition: background 90ms ease, transform 90ms ease;
+  }
+  #btnAlt:hover { background: rgba(79,227,255,0.16); transform: translateY(-1px); }
+  #btn { margin-top: 0; }
+  #actions #btn { margin-top: 0; }
+  .menuList { margin-top: 6px; }
+  .menuList .mrow {
+    pointer-events: auto; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; margin-top: 6px; text-align: left; width: 100%;
+    font-family: inherit; font-size: 12px; letter-spacing: 2.5px;
+    color: rgba(207,233,245,0.8); background: rgba(3,10,14,0.55);
+    border: 1px solid rgba(79,227,255,0.16);
+    clip-path: polygon(0 7px, 7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
+    transition: border-color 90ms, color 90ms, background 90ms, transform 90ms;
+  }
+  .menuList .mrow:hover, .menuList .mrow:focus-visible {
+    border-color: var(--cyan); color: var(--cyan); background: rgba(79,227,255,0.10);
+    transform: translateX(3px); outline: none;
+  }
+  .menuList .mrow .caret { color: var(--amber); }
+  .menuList .mrow .mnote { margin-left: auto; font-size: 9px; letter-spacing: 1.5px; color: rgba(207,233,245,0.4); }
+  #opts { margin-top: 8px; text-align: left; }
+  .optRow {
+    display: grid; grid-template-columns: 86px 1fr auto; align-items: center; gap: 10px;
+    padding: 7px 0; border-bottom: 1px solid rgba(79,227,255,0.09);
+  }
+  .optRow:last-child { border-bottom: none; }
+  .optRow .olabel { font-size: 9px; letter-spacing: 2px; color: rgba(207,233,245,0.55); }
+  .optRow .ochips { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+  .optRow .ochip {
+    pointer-events: auto; cursor: pointer; font-family: inherit; font-size: 9.5px;
+    letter-spacing: 1.4px; padding: 5px 9px; color: rgba(207,233,245,0.7);
+    background: rgba(3,10,14,0.7); border: 1px solid rgba(79,227,255,0.22);
+  }
+  .optRow .ochip:hover { border-color: var(--cyan); color: var(--cyan); }
+  .optRow .ochip.sel { background: rgba(79,227,255,0.15); border-color: var(--cyan); color: var(--cyan); }
+  .optRow .ochip.off { color: rgba(207,233,245,0.34); border-color: rgba(207,233,245,0.14); }
+  .optRow .oval { font-size: 10px; color: var(--amber); min-width: 34px; text-align: right; }
+  .scaleBar { display: flex; gap: 3px; justify-content: flex-end; }
+  .scaleBar .seg {
+    pointer-events: auto; cursor: pointer; width: 13px; height: 13px;
+    background: rgba(3,10,14,0.85); border: 1px solid rgba(255,182,72,0.3);
+  }
+  .scaleBar .seg.on { background: var(--amber); box-shadow: 0 0 9px rgba(255,182,72,0.6); }
+  .keyTable { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; margin-top: 4px; }
+  .keyTable .kk { color: var(--amber); letter-spacing: 1px; white-space: nowrap; }
+  #qPill { position: absolute; right: 14px; top: 14px; padding: 5px 9px; font-size: 9px;
+           letter-spacing: 2px; color: rgba(207,233,245,0.55); }
+  #qPill.auto { color: var(--amber); }
+
+  /* =======================================================================
+     GAME FEEL LAYERS
+     ======================================================================= */
+  #windVig {
+    position: fixed; inset: 0; pointer-events: none; z-index: 5; opacity: 0;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 34%, rgba(255,86,60,0.30) 78%, rgba(255,50,30,0.62) 100%);
+    transition: opacity 220ms linear;
+  }
+  /* z-index 9: above the HUD panels (8) so a chevron at the top of the screen
+     is never swallowed by the mission bar, below the card overlay (20). */
+  #dmgDir {
+    position: fixed; left: 50%; top: 50%; width: 0; height: 0; z-index: 9;
+    pointer-events: none; opacity: 0;
+  }
+  #dmgDir > i {
+    position: absolute; left: 0; top: -13px; width: 0; height: 0;
+    border-top: 13px solid transparent; border-bottom: 13px solid transparent;
+    border-left: 20px solid rgba(255, 70, 60, 0.9);
+    filter: drop-shadow(0 0 8px rgba(255,60,40,0.85));
+  }
+  #dmgDir > u {
+    position: absolute; left: 0; top: 20px; width: 120px; margin-left: -60px;
+    text-align: center; font-size: 9px; letter-spacing: 2px; text-decoration: none;
+    color: var(--red); text-shadow: 0 0 8px rgba(0,0,0,0.9);
+  }
+  #markers { position: fixed; inset: 0; z-index: 9; pointer-events: none; }
+  .mk {
+    position: absolute; left: 0; top: 0; opacity: 0;
+    transform: translate(-50%, -50%); transition: opacity 140ms linear;
+    font-size: 9px; letter-spacing: 1.5px; text-align: center;
+  }
+  .mk > .arrow {
+    display: block; width: 0; height: 0; margin: 0 auto 2px;
+    border-left: 6px solid transparent; border-right: 6px solid transparent;
+  }
+  .mk.exfil { color: #3dff9e; text-shadow: 0 0 9px rgba(61,255,158,0.7); }
+  .mk.exfil > .arrow { border-bottom: 10px solid #3dff9e; }
+  .mk.storm { color: #eaf4ff; text-shadow: 0 0 9px rgba(255,120,110,0.8); }
+  .mk.storm > .arrow { border-bottom: 10px solid #ff8b7a; }
+  .mk .dist { display: block; opacity: .85; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #ldTitle, #ldTitle > span, #ldStorm > i, #ldStorm > b, #loading::before {
+      animation: none !important; opacity: 1 !important;
+    }
+    #loading::before { display: none; }
+  }
+  @media (max-height: 560px) {
+    #ldStorm { height: 130px; width: 170px; margin-bottom: 12px; }
+    #ldTip { display: none; }
+  }
+
+  @media (max-width: 860px) {
+    #topBar { width: calc(100% - 28px); min-width: 0; top: 186px; }
+    #blPanel, #brPanel { width: calc(50% - 21px); }
+    #brPanel { right: 14px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="vignette"></div>
+<div id="flash"></div>
+<div id="dmgFlash"></div>
+<div id="scanlines"></div>
+<div id="windVig"></div>
+<div id="dmgDir"><i></i><u></u></div>
+
+<div id="hud">
+  <div id="qPill" class="panel" title="Render quality">HIGH</div>
+  <div id="mmWrap" class="panel">
+    <div id="mmLabel"><span>RADAR</span><span id="mmMode">TACTICAL</span></div>
+    <canvas id="minimap" width="168" height="168"></canvas>
+  </div>
+
+  <div id="topBar" class="panel">
+    <div id="dataRow">
+      <div style="display:flex; justify-content:space-between; align-items:baseline;">
+        <span class="label">Research Data Uplink</span>
+        <span class="val" id="dataVal">0%</span>
+      </div>
+      <div class="bar" id="dataBar"><div class="fill" id="dataFill"></div><div class="ticks"></div></div>
+    </div>
+    <div id="rightStack">
+      <div class="label">Storm Intensity</div>
+      <div class="val" id="efVal">EF1</div>
+      <div id="efPips"></div>
+      <div class="label" id="extractLabel" style="margin-top:6px;">Escalation</div>
+      <div class="val" id="timerVal">02:00</div>
+    </div>
+  </div>
+
+  <div id="blPanel" class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span class="label">Hull Integrity</span>
+      <span class="val" id="hullVal">100</span>
+    </div>
+    <div class="bar" id="hullBar"><div class="fill" id="hullFill"></div><div class="ticks"></div></div>
+    <div id="anchorRow">
+      <span id="anchorTag">CRUISING</span>
+      <span class="label" id="speedVal">0 KM/H</span>
+    </div>
+    <div id="anchorCharge"><div class="fill" id="anchorFill"></div></div>
+  </div>
+
+  <div id="brPanel" class="panel">
+    <div style="display:flex; justify-content:space-between; align-items:baseline;">
+      <span class="label">Data Probes</span>
+      <span class="val" id="probeVal">3 / 3</span>
+    </div>
+    <div id="probeDots"></div>
+    <div id="hints">
+      <b>[W][A][S][D]</b> DRIVE &nbsp; <b>[SPACE]</b> ANCHOR<br />
+      <b>[E]</b> DEPLOY PROBE &nbsp; <b>[R]</b> RESTART
+    </div>
+    <div id="statusLine"></div>
+  </div>
+</div>
+
+<div id="markers"><div class="mk storm" id="mkStorm"><i class="arrow"></i><span class="dist"></span></div><div class="mk exfil" id="mkExfil"><i class="arrow"></i><span class="dist"></span></div></div>
+<div id="screen">
+  <div id="card">
+    <div id="brandMark">TORNADO-HOLIC</div>
+    <div id="title">TORNADO-HOLIC</div>
+    <div id="subtitle">STORM EXTRACTION</div>
+    <div id="bigTitle">Field Protocol // EF4 Intercept</div>
+    <div id="cardBody">
+      You pilot the <span class="k">STORM ROVER</span>, a 6-wheeled armored research vehicle.
+      A violent tornado is crossing the test range while the clock runs: the storm
+      escalates from <span class="k">EF1</span> to <span class="k">EF4</span> over
+      <span class="k">90–150 seconds</span>, depending on the risk tier below.<br /><br />
+      Drive into the funnel's edge and drop <span class="k">DATA PROBES</span>
+      <span class="k">[E]</span> — the closer the probe sits to the vortex, the faster it
+      uplinks. Fill the research pool to <span class="k">100%</span>, then race to the
+      <span class="k">EXTRACTION BUNKER</span> and park inside the landing pad.<br /><br />
+      Hold <span class="k">[SPACE]</span> to drive hydraulic anchors into the ground:
+      full immunity to suction — but the reserve lasts seconds, and a strong funnel
+      will rip them straight back out.
+    </div>
+    <div id="setup">
+      <div class="setupRow"><span class="slabel">MAP</span><span id="mapChips"></span></div>
+      <div class="setupRow"><span class="slabel">RISK</span><span id="tierChips"></span></div>
+      <div id="setupDesc"></div>
+    </div>
+    <div id="menuList" class="menuList" style="display:none;"></div>
+    <div id="opts" style="display:none;"></div>
+    <div id="bestLine" style="display:none;"></div>
+    <div id="stats" style="display:none;">
+      <div class="stat"><div class="sv" id="stTime">0:00</div><div class="sl">TIME</div></div>
+      <div class="stat"><div class="sv" id="stProx">--</div><div class="sl">PEAK PROXIMITY</div></div>
+      <div class="stat"><div class="sv" id="stData">0%</div><div class="sl">DATA</div></div>
+      <div class="stat"><div class="sv" id="stGrade">—</div><div class="sl">GRADE</div></div>
+    </div>
+    <div id="actions">
+      <button id="btn">START MISSION</button>
+      <button id="btnAlt" style="display:none;">HOW TO PLAY</button>
+    </div>
+    <div id="fatal"></div>
+  </div>
+</div>
+
+
+<!-- =====================  LOADING SCREEN  ===================== -->
+<div id="loading" class="show">
+  <div id="ldStorm" aria-hidden="true"></div>
+  <div id="ldKicker">Armed Meteorology Division</div>
+  <div id="ldTitle">TORNADO-HOLIC</div>
+  <div id="ldSub">STORM EXTRACTION</div>
+  <div id="ldGauge">
+    <div class="bar" id="ldBar"><div class="fill"></div><div class="ticks"></div></div>
+    <div id="ldRow"><span id="ldStage">booting</span><span id="ldPct">0%</span></div>
+  </div>
+  <div id="ldTip"></div>
+  <div id="ldFatal"></div>
+  <button id="ldRetry">RETRY</button>
+  <div id="ldFoot"><span id="ldEngine">THREE r128</span><span id="ldQ">QUALITY —</span></div>
+</div>
+<!-- Three.js is vendored so the game boots offline. The fallback below is a
+     first-party inline document.write, which the parser executes synchronously —
+     a dynamically injected script would race this file and must not be used. -->
+<script src="vendor/three-r128.min.js"></script>
+<script>if (typeof THREE === "undefined") { window.__THREE_CDN = 1; document.write('<script src="https://unpkg.com/three@0.128.0/build/three.min.js"><\/script>'); }</script>
+<script>
+"use strict";
+
+if (typeof THREE === "undefined") {
+  // Nothing below this line can run without the engine (top-level Vector3s and
+  // the whole scene graph). Report it on the loading screen, which is pure CSS
+  // and is therefore already painted, and stop here.
+  const ld = document.getElementById("loading");
+  ld.classList.add("failed");
+  document.getElementById("ldStage").textContent = "engine unavailable";
+  document.getElementById("ldPct").textContent = "--";
+  document.getElementById("ldFatal").textContent =
+    "TORNADO-HOLIC could not load three.js r128. Neither the local vendor/three-r128.min.js " +
+    "copy nor the CDN was reachable. Keep the vendor folder next to this file to play offline.";
+  document.getElementById("ldRetry").addEventListener("click", () => location.reload());
+  throw new Error("THREE missing");
+}
+
+/* =========================================================================
+   0. CONFIG
+   ========================================================================= */
+const CFG = {
+  // Run-specific values: re-bound by applySetup() from the selected entry of
+  // MAPS and TIERS. The numbers here are only the Dust Bowl / Field Ops defaults.
+  MAP: 140,
+  HALF: 70,
+  VIEW: 78,                 // orthographic frustum height (world units)
+  ROAD_HALF: 9,             // half width of the road surface
+  PROP_COUNT: 40,
+  BUNKER: { x: -50, z: -50, padR: 10 },
+  ESCALATE_TIME: 120,       // seconds from EF1 to EF4
+  PROBES_START: 3,
+
+  CAM_OFFSET: new THREE.Vector3(60, 60, 60),
+  DATA_TARGET: 100,
+
+  VEHICLE: {
+    accel: 20,
+    reverse: 12,
+    brake: 30,
+    maxSpeed: 24,
+    maxReverse: 11,
+    turnRate: 1.55,         // rad/s at full grip
+    rollDrag: 0.85,         // forward drag coefficient
+    gripDamp: 9.0,          // lateral (sideways) grip
+    maxHealth: 100,         // scaled by the risk tier at run start
+    hitIFrames: 0.45,       // one hull hit per this many seconds, however many
+                            // bodies are tumbling around the rover
+    hitCap: 16              // hardest single debris/prop impact, before the tier
+                            // damage multiplier
+  },
+
+  VORTEX: {
+    height: 34,
+    tiers: 10,
+    baseR: 1.6,
+    topR: 6.6,
+    pullR: [28, 46],        // EF1 -> EF4
+    tanR: [16, 30],
+    liftR: [6, 14],
+    forceK: [1.0, 2.4],
+    speed: [4.5, 13.0],
+    scale: [0.75, 1.55]
+  },
+
+  GRAVITY: -30,
+
+  // Uplink bands by distance to the nearest funnel. `core` is the gambit.
+  UPLOAD: { core: 5, coreRate: 12, near: 15, nearRate: 5, mid: 30, midRate: 2, farRate: 0.8 },
+
+  // Hydraulic anchor: a reserve, not a free immunity button.
+  ANCHOR: { drainSeconds: 6, rechargeSeconds: 18, ripIntensity: 0.66, lockSeconds: 1.2 },
+
+  // Once the payload is full the storm hunts the rover and the clock runs out.
+  EXTRACT_WINDOW: 45,
+  EXTRACT_BURN: 2,
+};
+
+/* ---- Maps: each one reshapes the terrain, the road network, the prop mix
+        and the weather.
+          terrain.mesa      stacks stepped plateaus (Badlands)
+          terrain.channels  carves flooded channels (Causeway)
+          terrain.bias      lifts the whole landmass above the water line
+          strike            lets lightning hit near the rover
+          weatherRadarNoise heavy rain blanks the radar return on a flash ---- */
+const MAPS = [
+  {
+    id: "dustbowl",
+    name: "DUST BOWL",
+    blurb: "Open wheat country. Cross-roads, long sight lines, nowhere to hide from the funnel.",
+    size: 180, view: 82, seed: 20260831,
+    sky: 0x2c3e50, fog: [100, 250],
+    ambient: { color: 0x8fb0c8, intensity: 0.5 },
+    sun: { color: 0xfff2d8, intensity: 0.8 },
+    rim: { color: 0x5fa8d3, intensity: 0.28 },
+    rain: { color: 0x9fc4d8, opacity: 0.35 },
+    lightning: [2.5, 8.0],
+    terrain: {
+      freqA: 0.085, freqB: 0.072, freqC: 0.037, amp: 1.15, amp2: 0.85,
+      fbmFreq: 0.045, fbmAmp: 1.3, rimStart: 0.55, rimHeight: 9.0,
+      mesa: null, bias: 0, channels: null,
+      palette: { low: 0x5c4f38, base: 0x4f7f3c, dry: 0x8a7b46, rock: 0x6d6a5c }
+    },
+    roads: { half: 9, cross: true, ring: false, diagonal: false },
+    bunker: { x: -64, z: -64, padR: 10 },
+    spawn: { x: 0, z: 58, heading: Math.PI },
+    vortexStart: { x: 44, z: 44 },
+    props: { count: 60, weights: { pine: 4, shed: 2, fence: 3, barrel: 2, rock: 1 } }
+  },
+  {
+    id: "badlands",
+    name: "BADLANDS",
+    blurb: "Stepped mesas and red rock. A single ring road is the only fast line out; dust cuts visibility.",
+    size: 195, view: 88, seed: 77120,
+    sky: 0x6b4a37, fog: [75, 205],
+    ambient: { color: 0xd9a06a, intensity: 0.55 },
+    sun: { color: 0xffd9a0, intensity: 0.95 },
+    rim: { color: 0xff9d5c, intensity: 0.35 },
+    rain: { color: 0xd9b98a, opacity: 0.2 },
+    lightning: [4.0, 11.0],
+    terrain: {
+      freqA: 0.060, freqB: 0.050, freqC: 0.030, amp: 1.6, amp2: 1.1,
+      fbmFreq: 0.035, fbmAmp: 1.8, rimStart: 0.5, rimHeight: 14.0,
+      mesa: { freq: 0.028, steps: 3, height: 7.5 }, bias: 0, channels: null,
+      palette: { low: 0x6b3a24, base: 0x9c5a34, dry: 0xc98b52, rock: 0x7d5240 }
+    },
+    roads: { half: 8, cross: false, ring: true, ringR: 58, spurs: true, diagonal: false },
+    bunker: { x: 69, z: -64, padR: 10 },
+    spawn: { x: -59, z: 59, heading: Math.PI * 0.75 },
+    vortexStart: { x: -41, z: -41 },
+    props: { count: 56, weights: { pine: 1, shed: 1, fence: 1, barrel: 2, rock: 4, cactus: 3 } }
+  },
+  {
+    id: "nightshift",
+    name: "NIGHT SHIFT",
+    blurb: "Floodlit freight yard, 03:00. Containers, fuel drums, heavy rain and lightning on a short fuse.",
+    size: 170, view: 80, seed: 4242,
+    sky: 0x0b1420, fog: [60, 180],
+    ambient: { color: 0x2f4a68, intensity: 0.30 },
+    sun: { color: 0x9fc0ff, intensity: 0.40 },
+    rim: { color: 0x3f7fd0, intensity: 0.22 },
+    rain: { color: 0xa8c8e8, opacity: 0.5 },
+    lightning: [1.4, 4.5],
+    /* warn/radius are the counterplay: the bolt lands where the rover STOOD
+       warn seconds ago, so driving out of the ring avoids it entirely. */
+    strike: { chance: 0.15, stunSeconds: 1.1, damage: 6, cooldown: 12, warn: 0.95, radius: 11 },
+    weatherRadarNoise: true,
+    terrain: {
+      freqA: 0.050, freqB: 0.045, freqC: 0.026, amp: 0.7, amp2: 0.5,
+      fbmFreq: 0.030, fbmAmp: 0.8, rimStart: 0.6, rimHeight: 11.0,
+      mesa: null, bias: 0, channels: null,
+      palette: { low: 0x1b2530, base: 0x2c3a33, dry: 0x3d4238, rock: 0x39424c }
+    },
+    roads: { half: 10, cross: true, ring: false, diagonal: true },
+    bunker: { x: 57, z: 57, padR: 11 },
+    spawn: { x: -55, z: -55, heading: Math.PI * 0.25 },
+    vortexStart: { x: 39, z: -39 },
+    props: { count: 66, weights: { pine: 1, shed: 1, fence: 2, barrel: 4, rock: 1, container: 4, floodlight: 3 } }
+  },
+  {
+    id: "causeway",
+    name: "COASTAL CAUSEWAY",
+    blurb: "Salt flats cut by flooded channels. The causeway is the only dry crossing, and the funnel owns it.",
+    size: 190, view: 86, seed: 90210,
+    sky: 0x33505c, fog: [85, 215],
+    ambient: { color: 0x9fc0cc, intensity: 0.52 },
+    sun: { color: 0xffe9d0, intensity: 0.85 },
+    rim: { color: 0x6fd0d8, intensity: 0.30 },
+    rain: { color: 0xbcd8e0, opacity: 0.4 },
+    lightning: [3.0, 9.0],
+    water: { level: -0.6, color: 0x1d4e63, opacity: 0.78 },
+    weatherRadarNoise: true,
+    terrain: {
+      freqA: 0.055, freqB: 0.048, freqC: 0.028, amp: 0.9, amp2: 0.6,
+      fbmFreq: 0.032, fbmAmp: 1.0, rimStart: 0.60, rimHeight: 10.0,
+      mesa: null, bias: 1.2,
+      channels: { offset: 34, width: 7, fade: 10, depth: 4.2 },
+      palette: { low: 0x3f5a52, base: 0x8fa07a, dry: 0xc0b98c, rock: 0x6d7a72 }
+    },
+    roads: { half: 9, cross: true, ring: false, diagonal: false },
+    bunker: { x: -66, z: 62, padR: 10 },
+    spawn: { x: 58, z: 58, heading: Math.PI * 1.25 },
+    vortexStart: { x: -40, z: 40 },
+    props: { count: 56, weights: { pine: 2, shed: 2, fence: 3, barrel: 3, rock: 3, container: 2 } }
+  }
+];
+
+/* ---- Risk tiers: everything the storm and the rover scale by.
+        radar: 0 = unlimited, otherwise the funnel only paints inside that
+        many metres of the rover. ---- */
+const TIERS = [
+  {
+    id: "recon", name: "RECON",
+    blurb: "150s escalation · 4 probes · 120 hull · soft suction, storm wanders, full radar",
+    escalate: 150, probes: 4, hull: 120, radar: 0,
+    dmg: 0.6, force: 0.8, speed: 0.8, dataRate: 1.15, huntAt: 0.6, drain: 5
+  },
+  {
+    id: "field", name: "FIELD OPS",
+    blurb: "120s escalation · 3 probes · 100 hull · the intended run, radar reaches 60m",
+    escalate: 120, probes: 3, hull: 100, radar: 60,
+    dmg: 1.0, force: 1.0, speed: 1.0, dataRate: 1.0, huntAt: 0.45, drain: 7
+  },
+  {
+    id: "chaser", name: "STORM CHASER",
+    blurb: "90s escalation · 3 probes · 80 hull · hunts you early, radar only reaches 40m",
+    escalate: 90, probes: 3, hull: 80, radar: 40,
+    dmg: 1.5, force: 1.3, speed: 1.25, dataRate: 0.9, huntAt: 0.2, drain: 10
+  }
+];
+
+/* ---- Render quality ------------------------------------------------------
+   Every knob the GPU actually pays for. "auto" starts at high and steps down
+   when the frame rate cannot hold 45fps, then back up once it recovers. ---- */
+const QUALITY = {
+  low:  { label: "LOW",  ratio: 1,    shadows: false, shadowMap: 1024, particles: 320, rain: 220, propScale: 0.70, debrisCap: 18 },
+  med:  { label: "MED",  ratio: 1.5,  shadows: true,  shadowMap: 1024, particles: 560, rain: 420, propScale: 0.85, debrisCap: 30 },
+  high: { label: "HIGH", ratio: 2,    shadows: true,  shadowMap: 2048, particles: 900, rain: 700, propScale: 1.00, debrisCap: 44 }
+};
+const QKEYS = ["low", "med", "high"];
+let Q = QUALITY.high;          // the active preset
+let qualityMode = "auto";      // "auto" | "low" | "med" | "high"
+let autoKey = "high";          // where AUTO currently sits
+
+/* Ceilings for the buffers allocated once at boot. Presets only change how much
+   of these is DRAWN (setDrawRange), never how much is allocated — so switching
+   quality mid-run can never re-allocate or spike the garbage collector. ---- */
+const PMAX = 900;              // vortex dust particles per funnel
+const RAIN_N = 700;            // rain line segments
+let rainActive = RAIN_N;       // how many of them the current preset draws
+
+/* ---- Persisted settings + best run. localStorage can throw (private mode,
+   hardened file://), so every access is guarded and the game degrades to
+   defaults rather than failing to boot. ---- */
+const SAVE_KEY = "tornado-holic.v1";
+const SAVE = (function () {
+  const s = { quality: "auto", master: 7, amb: 8, eng: 6, sfx: 8, muted: 0, best: null };
+  try {
+    const raw = window.localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const j = JSON.parse(raw);
+      for (const k in s) if (j[k] !== undefined) s[k] = j[k];
+    }
+  } catch (e) { /* no storage: defaults are fine */ }
+  s.write = function () {
+    try {
+      window.localStorage.setItem(SAVE_KEY, JSON.stringify({
+        quality: s.quality, master: s.master, amb: s.amb, eng: s.eng,
+        sfx: s.sfx, muted: s.muted, best: s.best
+      }));
+    } catch (e) { /* ignore */ }
+  };
+  return s;
+})();
+/* =========================================================================
+   1. UTILITIES
+   ========================================================================= */
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (e0, e1, x) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
+const TAU = Math.PI * 2;
+
+// deterministic RNG (mulberry32) so the arena is reproducible across restarts
+function makeRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ---- value noise (Perlin-like, cheap, seeded) ----
+const NOISE = (function () {
+  const P = new Uint8Array(512);
+  const rng = makeRng(1337);
+  const perm = [];
+  for (let i = 0; i < 256; i++) perm.push(i);
+  for (let i = 255; i > 0; i--) { const j = (rng() * (i + 1)) | 0; const t = perm[i]; perm[i] = perm[j]; perm[j] = t; }
+  for (let i = 0; i < 512; i++) P[i] = perm[i & 255];
+  const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const hash = (xi, yi) => {
+    const h = P[(P[xi & 255] + (yi & 255)) & 255];
+    return h / 127.5 - 1;
+  };
+  return function noise2(x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const u = fade(xf), v = fade(yf);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return lerp(lerp(a, b, u), lerp(c, d, u), v);
+  };
+})();
+
+// fbm used for terrain tinting and tornado waypoints
+function fbm2(x, y, octaves) {
+  let amp = 1, freq = 1, sum = 0, norm = 0;
+  for (let i = 0; i < octaves; i++) {
+    sum += NOISE(x * freq, y * freq) * amp;
+    norm += amp; amp *= 0.5; freq *= 2.03;
+  }
+  return sum / norm;
+}
+
+/* =========================================================================
+   2. TERRAIN HEIGHT FIELD   (rebuilt per map by applySetup)
+   ========================================================================= */
+let MAP = MAPS[0];          // selected map config
+let TIER = TIERS[1];        // selected risk tier
+
+// 1 when (x,z) sits on any road surface of the current map, 0 well away from it.
+// Supports three layouts, which a map can combine: cross, ring (+ spurs), diagonal.
+function roadMask(x, z) {
+  const r = MAP.roads;
+  const fade = 4.0;
+  let mask = 0;
+  if (r.cross) {
+    mask = Math.max(mask, 1 - smoothstep(r.half - 1.5, r.half + fade, Math.min(Math.abs(x), Math.abs(z))));
+  }
+  if (r.ring) {
+    mask = Math.max(mask, 1 - smoothstep(r.half - 1.5, r.half + fade, Math.abs(Math.hypot(x, z) - r.ringR)));
+    if (r.spurs) {
+      mask = Math.max(mask, 1 - smoothstep(r.half - 1.5, r.half + fade, Math.min(Math.abs(x), Math.abs(z))));
+    }
+  }
+  if (r.diagonal) {
+    mask = Math.max(mask, 1 - smoothstep(r.half - 1.5, r.half + fade, Math.abs((x - z) * 0.7071)));
+  }
+  return mask;
+}
+
+// Builds the height sampler for a map. Everything that needs ground height
+// (vehicle, debris, props, tornado, minimap) calls the current `terrainH`.
+function makeHeightFn(map) {
+  const t = map.terrain, b = map.bunker, R = map.size * 0.5;
+  return function (x, z) {
+    let h = Math.sin(x * t.freqA) * Math.cos(z * t.freqB) * t.amp
+          + Math.sin((x + z) * t.freqC) * t.amp2
+          + fbm2(x * t.fbmFreq, z * t.fbmFreq, 3) * t.fbmAmp;
+
+    // Badlands: quantised plateaus instead of rolling hills
+    if (t.mesa) {
+      const m = fbm2(x * t.mesa.freq + 40, z * t.mesa.freq - 17, 2);
+      h += Math.round(m * t.mesa.steps) / t.mesa.steps * t.mesa.height;
+    }
+
+    // Causeway: lift the flats above the waterline, then carve two flooded
+    // channels on each axis. The roads stay flat across them — those are the bridges.
+    h += t.bias || 0;
+    if (t.channels) {
+      const c = t.channels;
+      const d = Math.min(
+        Math.abs(Math.abs(x) - c.offset),
+        Math.abs(Math.abs(z) - c.offset)
+      );
+      h -= (1 - smoothstep(c.width, c.width + c.fade, d)) * c.depth;
+    }
+
+    // raised rocky rim around the arena boundary
+    const edge = Math.max(Math.abs(x), Math.abs(z)) / R;
+    const rim = Math.max(0, (edge - t.rimStart) / (1 - t.rimStart));
+    h += rim * rim * t.rimHeight;
+    h *= (1 - roadMask(x, z) * 0.94);
+
+    // flattened apron around the extraction bunker
+    const db = Math.hypot(x - b.x, z - b.z);
+    h *= clamp((db - 9) / 15, 0, 1);
+
+    return h;
+  };
+}
+
+let terrainH = makeHeightFn(MAPS[0]);
+
+/* =========================================================================
+   3. RENDERER / SCENE / CAMERA / LIGHTS
+   ========================================================================= */
+const canvas = document.getElementById("scene");
+
+/* The WebGL context is not created at parse time any more: the loading screen
+   has to get its first paint in before the scene build starts, and the context
+   is also the first thing that can fail. Stage 0 of BOOT_STAGES calls this. */
+let renderer = null;
+let glLost = false;
+
+function createRenderer() {
+  if (renderer) return renderer;
+  renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: "high-performance" });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.ratio));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = Q.shadows;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.setClearColor(0x2c3e50, 1);
+  // A lost context is unrecoverable in three.js r128 — say so instead of
+  // letting the loop silently render nothing.
+  canvas.addEventListener("webglcontextlost", e => {
+    e.preventDefault();
+    glLost = true;
+    loaderFatal("The GPU dropped the WebGL context, so the storm can no longer be drawn. Press RETRY to re-deploy to the range.");
+  }, false);
+  return renderer;
+}
+
+/* Effective preset: AUTO floats between the three, an explicit choice does not. */
+function qualityKey() { return qualityMode === "auto" ? autoKey : qualityMode; }
+
+/* Re-binds every GPU-facing knob. Safe to call at any time, including mid-run:
+   nothing here re-allocates a buffer or rebuilds the arena. */
+function applyQuality(mode, quiet) {
+  qualityMode = (mode === "auto" || QUALITY[mode]) ? mode : "auto";
+  if (!QUALITY[autoKey]) autoKey = "high";
+  Q = QUALITY[qualityKey()];
+  SAVE.quality = qualityMode;
+  SAVE.write();
+
+  if (renderer) {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.ratio));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    if (renderer.shadowMap.enabled !== Q.shadows) {
+      renderer.shadowMap.enabled = Q.shadows;
+      // Toggling shadowMap.enabled changes the shader program, so every
+      // material has to be told to recompile or the old defines keep shipping.
+      scene.traverse(o => {
+        if (!o.isMesh || !o.material) return;
+        const list = Array.isArray(o.material) ? o.material : [o.material];
+        for (const m of list) m.needsUpdate = true;
+      });
+    }
+  }
+
+  sun.castShadow = Q.shadows;
+  if (sun.shadow.map && sun.shadow.mapSize.width !== Q.shadowMap) {
+    sun.shadow.map.dispose();
+    sun.shadow.map = null;                 // forces the depth atlas to be rebuilt
+  }
+  sun.shadow.mapSize.set(Q.shadowMap, Q.shadowMap);
+
+  rainActive = Math.min(RAIN_N, Q.rain);
+  if (rain) rain.geometry.setDrawRange(0, rainActive * 2);
+
+  for (let i = 0; i < vortices.length; i++) {
+    const v = vortices[i];
+    if (!v.baseParticles) continue;
+    v.pActive = Math.min(PMAX, Q.particles);
+    v.baseParticles.geometry.setDrawRange(0, v.pActive);
+  }
+
+  el.qPill.textContent = Q.label;
+  el.qPill.className = "panel" + (qualityMode === "auto" ? " auto" : "");
+  el.qPill.title = "Render quality: " + Q.label +
+    (qualityMode === "auto" ? " (auto, from " + qualityMode + ")" : " (locked)");
+  if (LOAD.q) LOAD.q.textContent = "QUALITY " + Q.label + (qualityMode === "auto" ? " · AUTO" : "");
+  if (!quiet) status("RENDER QUALITY — " + Q.label, 1.6);
+}
+
+/* ---- AUTO: rolling frame-rate window + hysteresis. One bad second must not
+        flicker the settings, so a step needs two consecutive samples, and a
+        step back up needs a much longer clean stretch. ---- */
+const AUTO = { acc: 0, frames: 0, low: 0, high: 0, cool: 0 };
+function tickAutoQuality(dt) {
+  if (qualityMode !== "auto") { AUTO.low = AUTO.high = 0; return; }
+  AUTO.acc += dt; AUTO.frames++;
+  if (AUTO.cool > 0) AUTO.cool -= dt;
+  if (AUTO.acc < 1) return;
+
+  const fps = AUTO.frames / AUTO.acc;
+  AUTO.acc = 0; AUTO.frames = 0;
+
+  if (fps < 45) {
+    AUTO.high = 0; AUTO.low++;
+    if (AUTO.low >= 2 && AUTO.cool <= 0) {
+      const i = QKEYS.indexOf(qualityKey());
+      if (i > 0) {
+        autoKey = QKEYS[i - 1];
+        applyQuality("auto", true);
+        status("AUTO — QUALITY LOWERED TO " + Q.label, 2.4);
+        AUTO.cool = 5;
+      }
+      AUTO.low = 0;
+    }
+  } else if (fps > 75) {
+    AUTO.low = 0; AUTO.high++;
+    if (AUTO.high >= 10 && AUTO.cool <= 0) {
+      const i = QKEYS.indexOf(qualityKey());
+      if (i < QKEYS.length - 1) {
+        autoKey = QKEYS[i + 1];
+        applyQuality("auto", true);
+        AUTO.cool = 5;
+      }
+      AUTO.high = 0;
+    }
+  } else {
+    AUTO.low = 0; AUTO.high = 0;
+  }
+}
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2c3e50);
+scene.fog = new THREE.Fog(0x2c3e50, 95, 235);
+
+let camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.5, 600);
+const camTarget = new THREE.Vector3(0, 0, 0);
+const camLook = new THREE.Vector3(0, 0, 0);
+const shake = new THREE.Vector3();
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  const aspect = w / h;
+  const v = CFG.VIEW;
+  camera.left = -v * aspect / 2; camera.right = v * aspect / 2;
+  camera.top = v / 2; camera.bottom = -v / 2;
+  camera.updateProjectionMatrix();
+  if (renderer) renderer.setSize(w, h);
+}
+window.addEventListener("resize", resize);
+// resize() is not called here any more: the renderer only exists after boot
+// stage 0, and the first resize happens inside that stage.
+
+// ---- lights ----
+const ambient = new THREE.AmbientLight(0x8fb0c8, 0.5);
+scene.add(ambient);
+
+const sun = new THREE.DirectionalLight(0xfff2d8, 0.8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 260;
+sun.shadow.camera.left = -62; sun.shadow.camera.right = 62;
+sun.shadow.camera.top = 62; sun.shadow.camera.bottom = -62;
+sun.shadow.bias = -0.0016;
+sun.shadow.normalBias = 0.5;
+scene.add(sun);
+const sunTarget = new THREE.Object3D();
+scene.add(sunTarget);
+sun.target = sunTarget;
+
+const rimLight = new THREE.DirectionalLight(0x5fa8d3, 0.28);
+rimLight.position.set(-60, 40, -40);
+scene.add(rimLight);
+
+// Resting light levels for the current map; lightning pulses off these.
+const LIGHT_BASE = { sun: 0.8, ambient: 0.5 };
+let LIGHTNING_GAP = [2.5, 8.0];
+
+function applyEnvironment(map) {
+  scene.background.setHex(map.sky);
+  scene.fog.color.setHex(map.sky);
+  scene.fog.near = map.fog[0];
+  scene.fog.far = map.fog[1];
+  renderer.setClearColor(map.sky, 1);
+
+  ambient.color.setHex(map.ambient.color);
+  ambient.intensity = map.ambient.intensity;
+  sun.color.setHex(map.sun.color);
+  sun.intensity = map.sun.intensity;
+  rimLight.color.setHex(map.rim.color);
+  rimLight.intensity = map.rim.intensity;
+
+  LIGHT_BASE.sun = map.sun.intensity;
+  LIGHT_BASE.ambient = map.ambient.intensity;
+  LIGHTNING_GAP = map.lightning;
+
+  if (rain) {
+    rain.material.color.setHex(map.rain.color);
+    rain.material.opacity = map.rain.opacity;
+  }
+  resize();
+}
+
+/* =========================================================================
+   4. SHARED GEOMETRY / MATERIAL CACHE
+   ========================================================================= */
+const GEO = {};
+const MAT = {};
+function geo(key, factory) { if (!GEO[key]) GEO[key] = factory(); return GEO[key]; }
+function mat(key, factory) { if (!MAT[key]) MAT[key] = factory(); return MAT[key]; }
+
+// Flat-shaded low-poly surface. Phong (not Lambert) is required: r128's
+// MeshLambertMaterial has no flatShading property and silently ignores it.
+function flatMat(color, opts) {
+  const o = opts || {};
+  return new THREE.MeshPhongMaterial({
+    color: color,
+    flatShading: o.flat !== false,
+    shininess: o.shininess || 0,
+    specular: o.specular || 0x000000,
+    transparent: !!o.transparent,
+    opacity: o.opacity !== undefined ? o.opacity : 1,
+    side: o.side || THREE.FrontSide,
+    depthWrite: o.depthWrite !== undefined ? o.depthWrite : true,
+    emissive: o.emissive || 0x000000
+  });
+}
+
+// geometries/materials created per arena build get disposed on restart
+const DISPOSABLES = [];
+function track(g) { DISPOSABLES.push(g); return g; }
+
+/* =========================================================================
+   5. ARENA: terrain, roads, props, bunker
+   ========================================================================= */
+let arena = null;         // THREE.Group rebuilt on restart
+let props = [];           // static destructible props
+let debris = [];          // free-flying bodies
+let probes = [];          // deployed sensor beacons
+let probesLeft = CFG.PROBES_START;
+
+function buildTerrain(parent) {
+  const g = track(new THREE.PlaneGeometry(CFG.MAP, CFG.MAP, 80, 80));
+  g.rotateX(-Math.PI / 2);
+
+  const pos = g.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const pal = MAP.terrain.palette;
+  const cBase = new THREE.Color(pal.base);
+  const cDry = new THREE.Color(pal.dry);
+  const cRock = new THREE.Color(pal.rock);
+  const cLow = new THREE.Color(pal.low);
+  const tmp = new THREE.Color();
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const h = terrainH(x, z);
+    pos.setY(i, h);
+
+    const tint = fbm2(x * 0.07, z * 0.07, 3) * 0.5 + 0.5;
+    tmp.copy(cBase).lerp(cDry, smoothstep(0.35, 0.75, tint));
+    const edge = Math.max(Math.abs(x), Math.abs(z)) / CFG.HALF;
+    tmp.lerp(cRock, smoothstep(0.62, 0.98, edge));
+    tmp.lerp(cLow, smoothstep(0.6, -1.0, h) * 0.45);
+    colors[i * 3] = tmp.r; colors[i * 3 + 1] = tmp.g; colors[i * 3 + 2] = tmp.b;
+  }
+  g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  g.computeVertexNormals();
+
+  const mesh = new THREE.Mesh(g, mat("terrain", () => new THREE.MeshPhongMaterial({
+    vertexColors: true, flatShading: true, shininess: 0, specular: 0x000000
+  })));
+  mesh.receiveShadow = true;
+  parent.add(mesh);
+}
+
+function buildRoads(parent) {
+  const roadMat = mat("asphalt", () => flatMat(0x33393f, { flat: false }));
+  const r = MAP.roads;
+  const L = CFG.MAP + 4, W = r.half * 2;
+
+  function plane(len, wid, x, z, ry, y) {
+    const g = track(new THREE.PlaneGeometry(len, wid));
+    g.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(g, roadMat);
+    mesh.position.set(x, y, z);
+    mesh.rotation.y = ry || 0;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    return mesh;
+  }
+
+  if (r.cross) {
+    plane(L, W, 0, 0, 0, 0.16);
+    plane(W, L, 0, 0, 0, 0.17);
+  }
+
+  if (r.ring) {
+    const rg = track(new THREE.RingGeometry(r.ringR - r.half, r.ringR + r.half, 72));
+    rg.rotateX(-Math.PI / 2);
+    const ring = new THREE.Mesh(rg, roadMat);
+    ring.position.y = 0.16;
+    ring.receiveShadow = true;
+    parent.add(ring);
+
+    if (r.spurs) {
+      // four connectors from the centre out to the ring
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + Math.PI / 4;
+        const dx = Math.sin(a), dz = Math.cos(a);
+        plane(r.ringR, W, dx * r.ringR * 0.5, dz * r.ringR * 0.5, a, 0.17);
+      }
+    }
+  }
+
+  if (r.diagonal) {
+    plane(L * 1.35, W, 0, 0, Math.PI / 4, 0.18);
+  }
+
+  // dashed centre markers, one instanced draw call for the whole network
+  const dashG = track(new THREE.PlaneGeometry(0.42, 3.4));
+  dashG.rotateX(-Math.PI / 2);
+  const dashMat = mat("dash", () => new THREE.MeshBasicMaterial({ color: 0xe8e2c8 }));
+  const marks = dashMarks();
+  if (marks.length) {
+    const dashes = new THREE.InstancedMesh(dashG, dashMat, marks.length);
+    const m = new THREE.Matrix4();
+    for (let i = 0; i < marks.length; i++) {
+      const d = marks[i];
+      m.makeRotationY(d.ry);
+      m.setPosition(d.x, 0.2, d.z);
+      dashes.setMatrixAt(i, m);
+    }
+    dashes.instanceMatrix.needsUpdate = true;
+    parent.add(dashes);
+  }
+}
+
+// Centre-line dashes for every road segment of the current layout.
+function dashMarks() {
+  const r = MAP.roads, out = [], step = 8.4, R = CFG.HALF;
+  if (r.cross) {
+    for (let t = -R + 4; t < R; t += step) {
+      out.push({ x: t, z: 0, ry: Math.PI / 2 });
+      out.push({ x: 0, z: t, ry: 0 });
+    }
+  }
+  if (r.ring) {
+    const n = Math.max(8, Math.round(TAU * r.ringR / step));
+    for (let i = 0; i < n; i++) {
+      const a = i / n * TAU;
+      out.push({ x: Math.cos(a) * r.ringR, z: Math.sin(a) * r.ringR, ry: -a });
+    }
+    if (r.spurs) {
+      for (let s = 0; s < 4; s++) {
+        const a = s * Math.PI / 2 + Math.PI / 4;
+        const dx = Math.sin(a), dz = Math.cos(a);
+        for (let t = step; t < r.ringR - r.half; t += step) {
+          out.push({ x: dx * t, z: dz * t, ry: a });
+        }
+      }
+    }
+  }
+  if (r.diagonal) {
+    for (let t = -R * 1.3; t < R * 1.3; t += step) {
+      const d = t * 0.7071;
+      out.push({ x: d, z: d, ry: Math.PI / 4 });
+    }
+  }
+  return out;
+}
+
+/* ---- destructible props ------------------------------------------------ */
+function makeRock(rng) {
+  const g = new THREE.Group();
+  const s = 1.5 + rng() * 1.9;
+  const rockM = mat("rock", () => flatMat(0x7a6f63));
+  const main = new THREE.Mesh(geo("rockGeo", () => new THREE.DodecahedronGeometry(1, 0)), rockM);
+  main.scale.set(s, s * (0.6 + rng() * 0.35), s * (0.85 + rng() * 0.3));
+  main.position.y = s * 0.42;
+  main.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+  g.add(main);
+  for (let i = 0; i < 2; i++) {
+    const chip = new THREE.Mesh(geo("rockGeo", () => new THREE.DodecahedronGeometry(1, 0)), rockM);
+    const cs = s * (0.25 + rng() * 0.2);
+    chip.scale.setScalar(cs);
+    chip.position.set((rng() - 0.5) * s * 1.7, cs * 0.6, (rng() - 0.5) * s * 1.7);
+    chip.rotation.set(rng() * 3, rng() * 3, rng() * 3);
+    g.add(chip);
+  }
+  g.userData.radius = s * 0.75;
+  g.userData.mass = 3.5 + s;
+  return g;
+}
+
+function makeCactus(rng) {
+  const g = new THREE.Group();
+  const cactusM = mat("cactus", () => flatMat(0x3f8f52));
+  const h = 2.4 + rng() * 1.6;
+  const trunk = new THREE.Mesh(geo("cactusTrunk", () => new THREE.CylinderGeometry(0.36, 0.42, 1, 7)), cactusM);
+  trunk.scale.y = h;
+  trunk.position.y = h * 0.5;
+  g.add(trunk);
+  const arms = 1 + ((rng() * 2) | 0);
+  for (let i = 0; i < arms; i++) {
+    const side = i === 0 ? 1 : -1;
+    const armH = 0.9 + rng() * 0.7;
+    const arm = new THREE.Mesh(geo("cactusArm", () => new THREE.CylinderGeometry(0.24, 0.26, 1, 6)), cactusM);
+    arm.scale.y = armH;
+    arm.position.set(side * 0.62, h * (0.5 + rng() * 0.18), 0);
+    g.add(arm);
+    const elbow = new THREE.Mesh(geo("cactusArm", () => new THREE.CylinderGeometry(0.24, 0.26, 1, 6)), cactusM);
+    elbow.scale.y = armH * 0.8;
+    elbow.position.set(side * 0.62, arm.position.y + armH * 0.45, 0);
+    elbow.rotation.z = side * -Math.PI / 2;
+    g.add(elbow);
+  }
+  g.userData.radius = 1.0;
+  g.userData.mass = 1.4;
+  return g;
+}
+
+function makeContainer(rng) {
+  const g = new THREE.Group();
+  const colors = [0x2f7d8c, 0xa33c2a, 0x3c6ea5, 0xb2a13a];
+  const c = colors[(rng() * colors.length) | 0];
+  const w = 5.8 + rng() * 0.8;
+  const body = new THREE.Mesh(
+    geo("box", () => new THREE.BoxGeometry(1, 1, 1)),
+    mat("container" + c, () => flatMat(c))
+  );
+  body.scale.set(w, 2.6, 2.5);
+  body.position.y = 1.3;
+  g.add(body);
+  // corrugation ribs
+  const ribM = mat("containerRib", () => flatMat(0x1d2228));
+  for (let i = 0; i < 5; i++) {
+    const rib = new THREE.Mesh(geo("box", () => new THREE.BoxGeometry(1, 1, 1)), ribM);
+    rib.scale.set(0.22, 2.4, 2.56);
+    rib.position.set(-w * 0.4 + i * (w * 0.2), 1.3, 0);
+    g.add(rib);
+  }
+  const bar = new THREE.Mesh(geo("box", () => new THREE.BoxGeometry(1, 1, 1)), ribM);
+  bar.scale.set(w + 0.05, 0.2, 2.58);
+  bar.position.y = 2.55;
+  g.add(bar);
+  g.userData.radius = w * 0.42;
+  g.userData.mass = 4.5;
+  return g;
+}
+
+function makeFloodlight(rng) {
+  const g = new THREE.Group();
+  const poleH = 6.5 + rng() * 1.6;
+  const pole = new THREE.Mesh(
+    geo("lampPole", () => new THREE.CylinderGeometry(0.16, 0.26, 1, 7)),
+    mat("lampPole", () => flatMat(0x4a5259))
+  );
+  pole.scale.y = poleH;
+  pole.position.y = poleH * 0.5;
+  g.add(pole);
+
+  const base = new THREE.Mesh(geo("lampBase", () => new THREE.CylinderGeometry(0.75, 0.95, 0.5, 8)), mat("lampPole", () => flatMat(0x4a5259)));
+  base.position.y = 0.25;
+  g.add(base);
+  const head = new THREE.Mesh(geo("box", () => new THREE.BoxGeometry(1, 1, 1)), mat("lampHead", () => flatMat(0x5b646c)));
+  head.scale.set(2.6, 0.55, 1.0);
+  head.position.set(0, poleH + 0.05, 0.75);
+  head.rotation.x = 0.35;
+  g.add(head);
+
+  // The camera looks down at ~45 degrees, so the emissive face has to sit ON TOP
+  // of the housing to be visible — a face on the underside never reads.
+  const lamp = new THREE.Mesh(
+    geo("box", () => new THREE.BoxGeometry(1, 1, 1)),
+    mat("lampGlow", () => new THREE.MeshBasicMaterial({ color: 0xfff6d0 }))
+  );
+  lamp.scale.set(2.75, 0.22, 1.1);
+  lamp.position.set(0, poleH + 0.42, 0.85);
+  lamp.rotation.x = 0.35;
+  g.add(lamp);
+
+  // additive bloom so the lamp reads as a light source from an isometric view
+  const bloom = new THREE.Mesh(
+    geo("lampBloom", () => new THREE.SphereGeometry(1, 10, 8)),
+    new THREE.MeshBasicMaterial({
+      color: 0xffe9a8, transparent: true, opacity: 0.34,
+      depthWrite: false, blending: THREE.AdditiveBlending
+    })
+  );
+  bloom.scale.set(2.6, 1.1, 1.5);
+  bloom.position.set(0, poleH + 0.45, 0.95);
+  g.add(bloom);
+
+  // fake volumetric shaft (additive cone, no real light — keeps the draw cheap)
+  const shaft = new THREE.Mesh(
+    geo("lampShaft", () => new THREE.ConeGeometry(2.9, 1, 14, 1, true)),
+    new THREE.MeshBasicMaterial({
+      color: 0xffe9b0, transparent: true, opacity: 0.10,
+      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending
+    })
+  );
+  shaft.scale.y = poleH;
+  shaft.position.y = poleH * 0.5;
+  g.add(shaft);
+
+  // lit pool on the ground under the lamp
+  const pool = new THREE.Mesh(
+    geo("lampPool", () => new THREE.CircleGeometry(3.8, 20)),
+    new THREE.MeshBasicMaterial({
+      color: 0xffdf9a, transparent: true, opacity: 0.13,
+      depthWrite: false, blending: THREE.AdditiveBlending
+    })
+  );
+  pool.rotation.x = -Math.PI / 2;
+  pool.position.y = 0.28;   // clear of the terrain, which props are sunk 0.15 into
+  g.add(pool);
+
+  g.userData.radius = 1.1;
+  g.userData.mass = 3.0;
+  return g;
+}
+
+// Prop registry. Maps weight these ids to shape their own scenery mix.
+const PROP_TYPES = {
+  pine: makePineTree,
+  shed: makeShed,
+  fence: makeFence,
+  barrel: makeBarrel,
+  rock: makeRock,
+  cactus: makeCactus,
+  container: makeContainer,
+  floodlight: makeFloodlight
+};
+
+function makePineTree(rng) {
+  const g = new THREE.Group();
+  const trunkH = 1.5 + rng() * 0.9;
+  const trunk = new THREE.Mesh(
+    geo("pineTrunk", () => new THREE.CylinderGeometry(0.22, 0.34, 1, 6)),
+    mat("bark", () => flatMat(0x6b4a2f))
+  );
+  trunk.scale.y = trunkH;
+  trunk.position.y = trunkH * 0.5;
+  g.add(trunk);
+
+  const tiers = 3;
+  for (let i = 0; i < tiers; i++) {
+    const t = i / (tiers - 1);
+    const r = lerp(1.85, 0.75, t);
+    const h = lerp(2.6, 1.9, t);
+    const cone = new THREE.Mesh(
+      geo("pineCone" + i, () => new THREE.ConeGeometry(1, 1, 7)),
+      mat(i % 2 ? "pineA" : "pineB", () => flatMat(i % 2 ? 0x2f6b3c : 0x357a44))
+    );
+    cone.scale.set(r, h, r);
+    cone.position.y = trunkH + h * 0.5 + i * 1.45;
+    g.add(cone);
+  }
+  g.userData.radius = 1.7;
+  g.userData.mass = 1.1;
+  return g;
+}
+
+function makeShed(rng) {
+  const g = new THREE.Group();
+  const w = 4.4 + rng() * 1.6, d = 3.6 + rng() * 1.2, h = 2.4 + rng() * 0.6;
+  const body = new THREE.Mesh(
+    geo("box", () => new THREE.BoxGeometry(1, 1, 1)),
+    mat("shedWall", () => flatMat(0xc08a4e))
+  );
+  body.scale.set(w, h, d);
+  body.position.y = h * 0.5;
+  g.add(body);
+
+  const roof = new THREE.Mesh(
+    geo("pyrRoof", () => new THREE.ConeGeometry(1, 1, 4)),
+    mat("shedRoof", () => flatMat(0x8d4b3a))
+  );
+  roof.scale.set(w * 0.86, 1.7, d * 0.9);
+  roof.rotation.y = Math.PI * 0.25;
+  roof.position.y = h + 0.85;
+  g.add(roof);
+
+  const door = new THREE.Mesh(geo("box", () => new THREE.BoxGeometry(1, 1, 1)), mat("door", () => flatMat(0x3a2a1c)));
+  door.scale.set(1.1, 1.5, 0.14);
+  door.position.set(0, 0.75, d * 0.5 + 0.05);
+  g.add(door);
+
+  g.userData.radius = Math.max(w, d) * 0.52;
+  g.userData.mass = 3.2;
+  return g;
+}
+
+function makeFence(rng) {
+  const g = new THREE.Group();
+  const len = 5.5 + rng() * 2.5;
+  const postG = geo("post", () => new THREE.BoxGeometry(0.3, 1.7, 0.3));
+  const woodM = mat("wood", () => flatMat(0xa9763f));
+  const railG = geo("rail", () => new THREE.BoxGeometry(1, 0.22, 0.16));
+  for (let i = -1; i <= 1; i++) {
+    const p = new THREE.Mesh(postG, woodM);
+    p.position.set(i * len * 0.5, 0.85, 0);
+    p.rotation.y = rng() * 0.25;
+    g.add(p);
+  }
+  for (let i = 0; i < 2; i++) {
+    const r = new THREE.Mesh(railG, woodM);
+    r.scale.x = len;
+    r.position.set(0, 0.6 + i * 0.7, 0);
+    g.add(r);
+  }
+  g.userData.radius = len * 0.42;
+  g.userData.mass = 1.3;
+  return g;
+}
+
+function makeBarrel(rng) {
+  const g = new THREE.Group();
+  const colors = [0xc0392b, 0x2980b9, 0xd35400];
+  const c = colors[(rng() * colors.length) | 0];
+  const body = new THREE.Mesh(
+    geo("barrel", () => new THREE.CylinderGeometry(0.62, 0.62, 1.7, 9)),
+    mat("barrel" + c, () => flatMat(c))
+  );
+  body.position.y = 0.85;
+  g.add(body);
+  const ringM = mat("barrelRing", () => flatMat(0x2f3640));
+  for (let i = 0; i < 2; i++) {
+    const r = new THREE.Mesh(geo("barrelRing", () => new THREE.CylinderGeometry(0.66, 0.66, 0.14, 9)), ringM);
+    r.position.y = 0.45 + i * 0.8;
+    g.add(r);
+  }
+  g.userData.radius = 0.75;
+  g.userData.mass = 0.7;
+  return g;
+}
+
+// Weighted pick from the current map's scenery mix.
+function pickPropFactory(weights, rng) {
+  let total = 0;
+  for (const k in weights) total += weights[k];
+  let roll = rng() * total;
+  for (const k in weights) {
+    roll -= weights[k];
+    if (roll <= 0 && PROP_TYPES[k]) return PROP_TYPES[k];
+  }
+  return makeBarrel;
+}
+
+function buildProps(parent, rng) {
+  props.length = 0;
+  const placed = [];
+  const spawn = MAP.spawn;
+  const weights = MAP.props.weights;
+  const target = Math.round(CFG.PROP_COUNT * Q.propScale);
+  let guard = 0;
+  while (props.length < target && guard++ < 6000) {
+    const x = (rng() * 2 - 1) * (CFG.HALF - 12);
+    const z = (rng() * 2 - 1) * (CFG.HALF - 12);
+    if (roadMask(x, z) > 0.12) continue;                                       // keep roads clear
+    if (MAP.water && terrainH(x, z) < MAP.water.level) continue;               // keep props dry
+    if (Math.hypot(x - CFG.BUNKER.x, z - CFG.BUNKER.z) < 24) continue;         // keep bunker clear
+    if (Math.hypot(x - spawn.x, z - spawn.z) < 14) continue;                   // keep spawn clear
+    let ok = true;
+    for (let i = 0; i < placed.length; i++) {
+      if (Math.hypot(x - placed[i].x, z - placed[i].z) < 7) { ok = false; break; }
+    }
+    if (!ok) continue;
+
+    const obj = pickPropFactory(weights, rng)(rng);
+    obj.position.set(x, terrainH(x, z) - 0.15, z);
+    obj.rotation.y = rng() * TAU;
+    obj.traverse(o => {
+      if (!o.isMesh) return;
+      o.castShadow = true;
+      o.receiveShadow = true;
+      // additive light shafts must not cast shadows
+      if (o.material && o.material.blending === THREE.AdditiveBlending) o.castShadow = false;
+    });
+    parent.add(obj);
+    placed.push({ x: x, z: z });
+    props.push({
+      obj: obj,
+      pos: new THREE.Vector3(x, obj.position.y, z),
+      radius: obj.userData.radius,
+      mass: obj.userData.mass,
+      alive: true
+    });
+  }
+}
+
+/* ---- extraction bunker ------------------------------------------------- */
+const bunker = {
+  center: new THREE.Vector3(CFG.BUNKER.x, 0, CFG.BUNKER.z),
+  pad: null, beam: null, ring: null, active: false
+};
+
+function buildBunker(parent) {
+  const g = new THREE.Group();
+  g.position.set(CFG.BUNKER.x, terrainH(CFG.BUNKER.x, CFG.BUNKER.z), CFG.BUNKER.z);
+
+  const concrete = mat("concrete", () => flatMat(0x9aa0a6));
+  const concreteDark = mat("concreteDark", () => flatMat(0x6f757b));
+  const boxG = geo("box", () => new THREE.BoxGeometry(1, 1, 1));
+
+  const base = new THREE.Mesh(boxG, concrete);
+  base.scale.set(17, 0.6, 15);
+  base.position.y = 0.3;
+  g.add(base);
+
+  const body = new THREE.Mesh(boxG, concrete);
+  body.scale.set(14, 6, 11);
+  body.position.set(0, 3.3, -1.5);
+  g.add(body);
+
+  const roof = new THREE.Mesh(boxG, concreteDark);
+  roof.scale.set(16, 0.8, 13);
+  roof.position.set(0, 6.7, -1.5);
+  g.add(roof);
+
+  // corner pillars
+  for (let sx = -1; sx <= 1; sx += 2) {
+    for (let sz = -1; sz <= 1; sz += 2) {
+      const p = new THREE.Mesh(boxG, concreteDark);
+      p.scale.set(1.2, 7.2, 1.2);
+      p.position.set(sx * 7.0, 3.6, -1.5 + sz * 5.6);
+      g.add(p);
+    }
+  }
+
+  // blast door + frame
+  const frame = new THREE.Mesh(boxG, concreteDark);
+  frame.scale.set(5.6, 4.6, 0.6);
+  frame.position.set(0, 2.3, 4.2);
+  g.add(frame);
+  const door = new THREE.Mesh(boxG, mat("doorMetal", () => flatMat(0x3d4650)));
+  door.scale.set(4.6, 3.9, 0.5);
+  door.position.set(0, 2.05, 4.3);
+  g.add(door);
+
+  // hazard stripes on the apron
+  for (let i = 0; i < 5; i++) {
+    const s = new THREE.Mesh(boxG, mat("hazard", () => flatMat(0xd8a327)));
+    s.scale.set(1.1, 0.12, 2.2);
+    s.position.set(-3.4 + i * 1.7, 0.66, 6.4);
+    s.rotation.y = 0.42;
+    g.add(s);
+  }
+
+  // landing pad (pulsing green circle)
+  const padG = track(new THREE.CircleGeometry(CFG.BUNKER.padR, 40));
+  padG.rotateX(-Math.PI / 2);
+  const pad = new THREE.Mesh(padG, new THREE.MeshBasicMaterial({
+    color: 0x27e06a, transparent: true, opacity: 0.22, depthWrite: false
+  }));
+  pad.position.set(0, 0.72, 5.2);
+  g.add(pad);
+  bunker.pad = pad;
+
+  const ringG = track(new THREE.RingGeometry(CFG.BUNKER.padR - 0.55, CFG.BUNKER.padR, 44));
+  ringG.rotateX(-Math.PI / 2);
+  const ring = new THREE.Mesh(ringG, new THREE.MeshBasicMaterial({
+    color: 0x7bffbe, transparent: true, opacity: 0.55, depthWrite: false
+  }));
+  ring.position.set(0, 0.74, 5.2);
+  g.add(ring);
+  bunker.ring = ring;
+
+  // green extraction beam (revealed at 100% data)
+  const beamG = track(new THREE.CylinderGeometry(CFG.BUNKER.padR * 0.92, CFG.BUNKER.padR * 0.92, 46, 22, 1, true));
+  const beam = new THREE.Mesh(beamG, new THREE.MeshBasicMaterial({
+    color: 0x3dff9e, transparent: true, opacity: 0.16,
+    side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending
+  }));
+  beam.position.set(0, 23.4, 5.2);
+  beam.visible = false;
+  g.add(beam);
+  bunker.beam = beam;
+
+  // Pad sits in front of the blast door; rotate the whole bunker so the door
+  // faces the middle of the map, then cache the pad's world position.
+  const rotY = Math.atan2(-CFG.BUNKER.x, -CFG.BUNKER.z);
+  g.rotation.y = rotY;
+  const off = new THREE.Vector3(0, 0, 5.2).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY);
+  bunker.center.set(CFG.BUNKER.x + off.x, 0, CFG.BUNKER.z + off.z);
+  bunker.active = false;
+
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  parent.add(g);
+}
+
+// Flat translucent sheet at the water line. Terrain above it hides the sheet,
+// so it only reads inside the carved channels and any low ground.
+function buildWater(parent) {
+  if (!MAP.water) return;
+  const g = track(new THREE.PlaneGeometry(CFG.MAP + 8, CFG.MAP + 8, 1, 1));
+  g.rotateX(-Math.PI / 2);
+  const mesh = new THREE.Mesh(g, new THREE.MeshPhongMaterial({
+    color: MAP.water.color, transparent: true, opacity: MAP.water.opacity,
+    shininess: 80, specular: 0x9fd8e8, flatShading: true
+  }));
+  mesh.position.y = MAP.water.level;
+  mesh.receiveShadow = false;
+  parent.add(mesh);
+}
+
+function disposeArena() {
+  if (!arena) return;
+  scene.remove(arena);
+  arena.traverse(o => { if (o.isInstancedMesh) o.dispose && o.dispose(); });
+  for (let i = 0; i < DISPOSABLES.length; i++) DISPOSABLES[i].dispose();
+  DISPOSABLES.length = 0;
+  arena = null;
+}
+
+// Binds the selected map + risk tier into the run constants, the height field
+// and the weather. Called once per run, before the arena is built.
+function applySetup(mapIndex, tierIndex) {
+  MAP = MAPS[mapIndex];
+  TIER = TIERS[tierIndex];
+
+  CFG.MAP = MAP.size;
+  CFG.HALF = MAP.size * 0.5;
+  CFG.VIEW = MAP.view;
+  CFG.ROAD_HALF = MAP.roads.half;
+  CFG.PROP_COUNT = MAP.props.count;
+  CFG.BUNKER = MAP.bunker;
+  CFG.ESCALATE_TIME = TIER.escalate;
+  CFG.PROBES_START = TIER.probes;
+  CFG.VEHICLE.maxHealth = TIER.hull;
+
+  terrainH = makeHeightFn(MAP);
+  applyEnvironment(MAP);
+  buildProbeDots(TIER.probes);
+}
+
+/* =========================================================================
+   6. TORNADO
+   ========================================================================= */
+// Shared storm progression (one clock for the whole mission).
+const storm = {
+  intensity: 0,      // 0..1 escalation EF1 -> EF4
+  ef: 1,
+  time: 0
+};
+
+// Seconds of radar dropout caused by lightning on storm-wracked maps.
+let radarBlackout = 0;
+const extract = { active: false, deadline: 0, burning: false };
+
+const _vTmpA = new THREE.Vector3();
+
+// Every funnel on the map. The primary spawns at run start; a second, smaller
+// one joins at EF4 (see maybeSpawnSatellite).
+const vortices = [];
+
+function makeVortex(scaleMul, speedMul) {
+  return {
+    group: new THREE.Group(),   // world transform / scale
+    lean: new THREE.Group(),    // leans toward travel direction
+    tiers: [],
+    baseParticles: null,
+    pData: null,
+    pos: new THREE.Vector3(30, 0, 30),
+    vel: new THREE.Vector3(),
+    waypoint: new THREE.Vector3(0, 0, 0),
+    waypointTimer: 0,
+    scaleMul: scaleMul,         // secondary funnels are narrower
+    speedMul: speedMul,
+    radiusAt(yFrac) {
+      return lerp(CFG.VORTEX.baseR, CFG.VORTEX.topR, Math.pow(clamp(yFrac, 0, 1), 1.55));
+    }
+  };
+}
+
+function buildVortex(v) {
+  const g = v.group;
+  while (g.children.length) g.remove(g.children[0]);
+  while (v.lean.children.length) v.lean.remove(v.lean.children[0]);
+  v.tiers.length = 0;
+
+  const H = CFG.VORTEX.height, N = CFG.VORTEX.tiers;
+  const tierH = H / N;
+  for (let i = 0; i < N; i++) {
+    const y0 = i * tierH;
+    const y1 = y0 + tierH;
+    const rB = v.radiusAt(y0 / H);
+    const rT = v.radiusAt(y1 / H);
+    const isDark = i % 2 === 0;
+    const tg = track(new THREE.CylinderGeometry(rT, rB, tierH * 1.18, 16, 1, true));
+    const m = new THREE.Mesh(tg, mat(isDark ? "torDark" : "torLight", () => flatMat(
+      isDark ? 0x39424f : 0xe8f1fb,
+      { transparent: true, opacity: isDark ? 0.9 : 0.3, side: THREE.DoubleSide, depthWrite: isDark }
+    )));
+    m.position.y = y0 + tierH * 0.5;
+    m.renderOrder = isDark ? 0 : 2;
+    v.lean.add(m);
+    v.tiers.push({ mesh: m, baseY: m.position.y, index: i, spin: (0.9 + i * 0.42) * (i % 2 ? 1 : -1) });
+  }
+
+  // dust / debris particle system: swirls inward and up the funnel. The buffer
+  // is always allocated at PMAX and the preset only moves the draw range, so
+  // changing quality mid-run never re-allocates anything.
+  const COUNT = PMAX;
+  const pg = track(new THREE.BufferGeometry());
+  const arr = new Float32Array(COUNT * 3);
+  const data = new Array(COUNT);
+  for (let i = 0; i < COUNT; i++) {
+    const d = {
+      a: Math.random() * TAU,
+      r: 2 + Math.random() * 9,
+      y: Math.random() * H,
+      speed: 1.4 + Math.random() * 2.6,
+      rise: 3 + Math.random() * 9,
+      size: 1
+    };
+    data[i] = d;
+    arr[i * 3] = Math.cos(d.a) * d.r;
+    arr[i * 3 + 1] = d.y;
+    arr[i * 3 + 2] = Math.sin(d.a) * d.r;
+  }
+  pg.setAttribute("position", new THREE.BufferAttribute(arr, 3));
+  const pm = new THREE.PointsMaterial({
+    color: 0xc7b28c, size: 0.85, sizeAttenuation: true,
+    transparent: true, opacity: 0.85, depthWrite: false
+  });
+  const points = new THREE.Points(pg, pm);
+  points.frustumCulled = false;
+  v.lean.add(points);
+  v.baseParticles = points;
+  v.pData = data;
+  v.pActive = Math.min(PMAX, Q.particles);
+  points.geometry.setDrawRange(0, v.pActive);
+
+  g.add(v.lean);
+  g.position.copy(v.pos);
+  scene.add(g);
+}
+
+// Tears down every funnel and builds a single primary at the map's start point.
+function buildTornado() {
+  for (let i = 0; i < vortices.length; i++) scene.remove(vortices[i].group);
+  vortices.length = 0;
+  const v = makeVortex(1, 1);
+  v.pos.set(MAP.vortexStart.x, 0, MAP.vortexStart.z);
+  vortices.push(v);
+  buildVortex(v);
+}
+
+// A second, faster and narrower funnel joins once the storm reaches EF4.
+function maybeSpawnSatellite() {
+  if (vortices.length > 1 || storm.ef < 4) return;
+  const v = makeVortex(0.62, 1.15);
+  // spawn on the far side of the map from the primary
+  const p = vortices[0].pos;
+  v.pos.set(clamp(-p.x, -50, 50), 0, clamp(-p.z, -50, 50));
+  v.pos.y = terrainH(v.pos.x, v.pos.z);
+  vortices.push(v);
+  buildVortex(v);
+  status("!! SECOND FUNNEL TOUCHING DOWN", 3);
+}
+
+function updateTornado(dt) {
+  storm.time += dt;
+  maybeSpawnSatellite();
+  for (let i = 0; i < vortices.length; i++) updateVortex(vortices[i], dt);
+}
+
+function updateVortex(v, dt) {
+  // ---- AI: Perlin-ish waypoints, biased toward points of interest ----
+  v.waypointTimer -= dt;
+  const poi = pickPointOfInterest(v);
+  if (v.waypointTimer <= 0 || v.pos.distanceTo(v.waypoint) < 6) {
+    v.waypointTimer = 5 + Math.random() * 5;
+    if (poi) {
+      v.waypoint.copy(poi);
+    } else {
+      const t = storm.time * 0.06 + v.scaleMul * 7.3;
+      const nx = fbm2(t, 11.3, 2) * 1.15;
+      const nz = fbm2(3.7, t * 1.2, 2) * 1.15;
+      v.waypoint.set(clamp(nx * 55, -58, 58), 0, clamp(nz * 55, -58, 58));
+    }
+  }
+
+  const speed = lerp(CFG.VORTEX.speed[0], CFG.VORTEX.speed[1], storm.intensity)
+    * TIER.speed * v.speedMul * (poi ? 1.15 : 1) * (extract.active ? 1.25 : 1);
+  const toWp = _vTmpA.subVectors(v.waypoint, v.pos);
+  toWp.y = 0;
+  const dist = toWp.length() || 1;
+  toWp.multiplyScalar(speed / dist);
+
+  v.vel.lerp(toWp, 1 - Math.exp(-1.8 * dt));
+  v.pos.addScaledVector(v.vel, dt);
+
+  // keep the vortex inside the arena; bounce off the rim
+  const lim = CFG.HALF - 8;
+  if (v.pos.x < -lim) { v.pos.x = -lim; v.vel.x = Math.abs(v.vel.x) * 0.6; }
+  if (v.pos.x > lim) { v.pos.x = lim; v.vel.x = -Math.abs(v.vel.x) * 0.6; }
+  if (v.pos.z < -lim) { v.pos.z = -lim; v.vel.z = Math.abs(v.vel.z) * 0.6; }
+  if (v.pos.z > lim) { v.pos.z = lim; v.vel.z = -Math.abs(v.vel.z) * 0.6; }
+
+  v.pos.y = terrainH(v.pos.x, v.pos.z);
+  v.group.position.copy(v.pos);
+
+  const s = lerp(CFG.VORTEX.scale[0], CFG.VORTEX.scale[1], storm.intensity) * v.scaleMul;
+  v.group.scale.set(s, s * (0.9 + 0.2 * storm.intensity), s);
+
+  // lean the funnel into its direction of travel
+  v.lean.rotation.z = lerp(v.lean.rotation.z, clamp(-v.vel.x * 0.012, -0.16, 0.16), 1 - Math.exp(-3 * dt));
+  v.lean.rotation.x = lerp(v.lean.rotation.x, clamp(v.vel.z * 0.012, -0.16, 0.16), 1 - Math.exp(-3 * dt));
+
+  // ---- tiers: spin + sinusoidal whipping wobble ----
+  const amp = 1.5 + 1.4 * storm.intensity;
+  for (let i = 0; i < v.tiers.length; i++) {
+    const t = v.tiers[i];
+    const f = t.index / (CFG.VORTEX.tiers - 1);
+    t.mesh.rotation.y += t.spin * dt * (0.6 + 0.9 * storm.intensity);
+    const ph = storm.time * (1.5 + f * 1.4) + t.index * 0.55;
+    const w = (0.12 + f * f * 1.5) * amp;
+    t.mesh.position.x = Math.sin(ph) * w + Math.sin(ph * 2.3 + 1.1) * w * 0.32;
+    t.mesh.position.z = Math.cos(ph * 0.92 + 0.6) * w + Math.cos(ph * 2.1) * w * 0.28;
+    t.mesh.position.y = t.baseY + Math.sin(storm.time * 1.7 + t.index) * 0.16;
+  }
+
+  // ---- dust particles ----
+  const parr = v.baseParticles.geometry.attributes.position.array;
+  const H = CFG.VORTEX.height;
+  const n = Math.min(v.pActive || PMAX, v.pData.length);
+  for (let i = 0; i < n; i++) {
+    const d = v.pData[i];
+    d.a += d.speed * dt * (1.0 + 1.6 * storm.intensity);
+    d.r -= dt * (0.7 + 2.2 * storm.intensity) * (1 + d.speed * 0.25);
+    d.y += d.rise * dt * (0.6 + storm.intensity);
+    if (d.r < 0.35 || d.y > H) {
+      d.r = 3 + Math.random() * (8 + 6 * storm.intensity);
+      d.y = Math.random() < 0.7 ? Math.random() * 3.5 : Math.random() * H * 0.5;
+      d.a = Math.random() * TAU;
+    }
+    const wob = Math.sin(d.y * 0.25 + storm.time * 2) * (0.4 + d.y * 0.05);
+    parr[i * 3] = Math.cos(d.a) * (d.r + wob);
+    parr[i * 3 + 1] = d.y;
+    parr[i * 3 + 2] = Math.sin(d.a) * (d.r + wob);
+  }
+  v.baseParticles.geometry.attributes.position.needsUpdate = true;
+}
+
+// Each funnel hunts the nearest live probe it has not already got on top of it.
+// With no probes in range it falls back to the rover once the storm is strong
+// enough (or immediately while the payload is complete — see `extract`).
+function pickPointOfInterest(v) {
+  let best = null, bestD = Infinity;
+  for (let i = 0; i < probes.length; i++) {
+    const d = probes[i].pos.distanceTo(v.pos);
+    if (d < bestD) { bestD = d; best = probes[i].pos; }
+  }
+  // the satellite leaves the primary's bait alone so the two don't stack
+  if (best && bestD < 70 && (v === vortices[0] || bestD > 25)) return best;
+  if ((storm.intensity > TIER.huntAt || extract.active || extract.burning) && vehicle) return vehicle.pos;
+  return null;
+}
+
+/* The funnel constants only move when the storm escalates or the tier changes,
+   but this is called from inside the debris and prop loops — dozens of times a
+   frame, each returning a fresh object literal. One shared object plus an
+   identity check collapses that to a single computation per frame. */
+const _VP = { pullR: 0, tanR: 0, liftR: 0, k: 0, t: -1, tier: null };
+function vortexParams() {
+  if (_VP.t !== storm.intensity || _VP.tier !== TIER) {
+    const t = storm.intensity;
+    _VP.t = t;
+    _VP.tier = TIER;
+    _VP.pullR = lerp(CFG.VORTEX.pullR[0], CFG.VORTEX.pullR[1], t);
+    _VP.tanR = lerp(CFG.VORTEX.tanR[0], CFG.VORTEX.tanR[1], t);
+    _VP.liftR = lerp(CFG.VORTEX.liftR[0], CFG.VORTEX.liftR[1], t);
+    _VP.k = lerp(CFG.VORTEX.forceK[0], CFG.VORTEX.forceK[1], t) * TIER.force;
+  }
+  return _VP;
+}
+
+// Radial pull (1/d^1.2), tangential swirl, and vertical lift near the core.
+// Summed over every active funnel. Writes into `out`. `massScale` = 1 / mass.
+const _vf = new THREE.Vector3();
+function vortexForce(px, py, pz, massScale, out) {
+  out.set(0, 0, 0);
+  const p = vortexParams();
+  for (let i = 0; i < vortices.length; i++) {
+    const v = vortices[i];
+    const dx = v.pos.x - px;
+    const dz = v.pos.z - pz;
+    const d = Math.hypot(dx, dz);
+    if (d > p.pullR || d < 0.0001) continue;
+
+    const inv = 1 / d;
+    const nx = dx * inv, nz = dz * inv;
+    const falloff = 1 / Math.pow(Math.max(d, 1.6), 1.2);
+    const pull = 620 * p.k * falloff * massScale * v.scaleMul;
+
+    out.x += nx * pull;
+    out.z += nz * pull;
+
+    if (d < p.tanR) {
+      const tang = 380 * p.k * falloff * massScale * v.scaleMul * (1 - d / p.tanR);
+      out.x += -nz * tang;
+      out.z += nx * tang;
+    }
+    if (d < p.liftR) {
+      const near = 1 - d / p.liftR;
+      const hAtt = clamp((30 - py) / 30, 0.08, 1);   // lift bleeds off with altitude
+      out.y += 240 * p.k * near * massScale * v.scaleMul * hAtt;
+      out.x += -nz * 700 * p.k * near * massScale * v.scaleMul;   // violent spin-up at the core
+      out.z += nx * 700 * p.k * near * massScale * v.scaleMul;
+    }
+  }
+  return out;
+}
+
+// Nearest funnel to a point, or null when the map has none.
+function nearestVortex(x, z) {
+  let best = null, bestD = Infinity;
+  for (let i = 0; i < vortices.length; i++) {
+    const d = Math.hypot(vortices[i].pos.x - x, vortices[i].pos.z - z);
+    if (d < bestD) { bestD = d; best = vortices[i]; }
+  }
+  return best;
+}
+
+// Distance from a point to the closest funnel.
+function nearestVortexDist(x, z) {
+  let best = Infinity;
+  for (let i = 0; i < vortices.length; i++) {
+    const d = Math.hypot(vortices[i].pos.x - x, vortices[i].pos.z - z);
+    if (d < best) best = d;
+  }
+  return best;
+}
+function insideAnyVortex(x, z, radius) {
+  for (let i = 0; i < vortices.length; i++) {
+    if (Math.hypot(vortices[i].pos.x - x, vortices[i].pos.z - z) < radius) return true;
+  }
+  return false;
+}
+
+/* =========================================================================
+   7. PLAYER VEHICLE
+   ========================================================================= */
+const vehicle = {
+  root: new THREE.Group(),     // position + yaw
+  tilt: new THREE.Group(),     // pitch / roll
+  wheels: [],
+  dish: null,
+  legs: [],
+  pos: new THREE.Vector3(0, 0, 46),
+  vel: new THREE.Vector3(),    // xz planar velocity
+  vy: 0,
+  heading: Math.PI,            // facing -Z
+  yawRate: 0,
+  speed: 0,                    // signed forward speed
+  health: CFG.VEHICLE.maxHealth,
+  anchored: false,
+  anchorCharge: 1,             // 0..1 hydraulic reserve, drained while anchored
+  anchorLock: 0,               // seconds left before anchors may re-engage
+  stunned: 0,                  // seconds of lightning-induced systems outage
+  airborne: false,
+  wheelSpin: 0,
+  iFrames: 0
+};
+
+function buildVehicle() {
+  const V = vehicle;
+  while (V.root.children.length) V.root.remove(V.root.children[0]);
+  V.wheels.length = 0;
+  V.legs.length = 0;
+
+  const yellow = mat("roverBody", () => flatMat(0xf39c12));
+  const yellowDark = mat("roverDark", () => flatMat(0xc07f0a));
+  const steel = mat("steel", () => flatMat(0x59636e));
+  const dark = mat("darkMetal", () => flatMat(0x2b3238));
+  const glass = mat("glass", () => flatMat(0x16242e, { flat: false }));
+  const boxG = geo("box", () => new THREE.BoxGeometry(1, 1, 1));
+
+  const chassis = new THREE.Mesh(boxG, yellow);
+  chassis.scale.set(3.3, 1.05, 6.2);
+  chassis.position.y = 1.55;
+  V.tilt.add(chassis);
+
+  const skirt = new THREE.Mesh(boxG, yellowDark);
+  skirt.scale.set(3.0, 0.5, 5.6);
+  skirt.position.y = 1.0;
+  V.tilt.add(skirt);
+
+  const cabin = new THREE.Mesh(boxG, yellow);
+  cabin.scale.set(2.9, 1.35, 2.7);
+  cabin.position.set(0, 2.75, -0.75);
+  V.tilt.add(cabin);
+
+  const cabTop = new THREE.Mesh(boxG, yellowDark);
+  cabTop.scale.set(3.05, 0.22, 3.0);
+  cabTop.position.set(0, 3.5, -0.75);
+  V.tilt.add(cabTop);
+
+  const windshield = new THREE.Mesh(boxG, glass);
+  windshield.scale.set(2.5, 0.95, 0.16);
+  windshield.position.set(0, 2.86, 0.63);
+  V.tilt.add(windshield);
+
+  for (let sx = -1; sx <= 1; sx += 2) {
+    const sideGlass = new THREE.Mesh(boxG, glass);
+    sideGlass.scale.set(0.16, 0.8, 1.7);
+    sideGlass.position.set(sx * 1.48, 2.86, -0.8);
+    V.tilt.add(sideGlass);
+  }
+
+  // front bull-bar
+  const barMain = new THREE.Mesh(boxG, steel);
+  barMain.scale.set(3.5, 0.45, 0.4);
+  barMain.position.set(0, 1.25, 3.35);
+  V.tilt.add(barMain);
+  for (let sx = -1; sx <= 1; sx += 2) {
+    const post = new THREE.Mesh(boxG, steel);
+    post.scale.set(0.34, 1.5, 0.34);
+    post.position.set(sx * 1.2, 1.85, 3.3);
+    V.tilt.add(post);
+  }
+  const barLower = new THREE.Mesh(boxG, steel);
+  barLower.scale.set(3.5, 0.3, 0.3);
+  barLower.position.set(0, 0.75, 3.3);
+  V.tilt.add(barLower);
+
+  // headlights
+  for (let sx = -1; sx <= 1; sx += 2) {
+    const hl = new THREE.Mesh(boxG, mat("lamp", () => new THREE.MeshBasicMaterial({ color: 0xfff2c0 })));
+    hl.scale.set(0.55, 0.35, 0.14);
+    hl.position.set(sx * 1.05, 1.85, 3.14);
+    V.tilt.add(hl);
+  }
+
+  // 6 wheels
+  const wheelG = geo("wheel", () => new THREE.CylinderGeometry(0.86, 0.86, 0.72, 12));
+  const treadM = mat("tread", () => flatMat(0x23282e));
+  const hubM = mat("hub", () => flatMat(0xd0d6db));
+  const hubG = geo("hub", () => new THREE.CylinderGeometry(0.36, 0.36, 0.78, 8));
+  const zs = [2.25, 0.15, -1.95];
+  for (let i = 0; i < zs.length; i++) {
+    for (let sx = -1; sx <= 1; sx += 2) {
+      const g = new THREE.Group();
+      const w = new THREE.Mesh(wheelG, treadM);
+      w.rotation.z = Math.PI / 2;
+      g.add(w);
+      const hub = new THREE.Mesh(hubG, hubM);
+      hub.rotation.z = Math.PI / 2;
+      g.add(hub);
+      g.position.set(sx * 1.78, 0.86, zs[i]);
+      V.tilt.add(g);
+      V.wheels.push({ g: g, z: zs[i], side: sx });
+    }
+  }
+
+  // rear probe launcher
+  const launcher = new THREE.Mesh(boxG, dark);
+  launcher.scale.set(1.5, 0.5, 0.9);
+  launcher.position.set(0, 1.75, -3.2);
+  V.tilt.add(launcher);
+
+  // rotating doppler dish
+  const dish = new THREE.Group();
+  const mast = new THREE.Mesh(geo("mast", () => new THREE.CylinderGeometry(0.14, 0.18, 0.9, 8)), steel);
+  mast.position.y = 0.45;
+  dish.add(mast);
+  const dome = new THREE.Mesh(geo("dome", () => new THREE.SphereGeometry(0.55, 12, 8)), mat("domeM", () => flatMat(0xe6ecf2)));
+  dome.position.y = 1.0;
+  dish.add(dome);
+  const bowl = new THREE.Mesh(
+    geo("bowl", () => new THREE.SphereGeometry(1.15, 16, 10, 0, TAU, 0, Math.PI * 0.5)),
+    mat("dishM", () => flatMat(0xe9eef4, { side: THREE.DoubleSide }))
+  );
+  bowl.position.y = 1.55;
+  bowl.scale.set(1, 0.72, 1);
+  bowl.rotation.x = -0.62;
+  dish.add(bowl);
+  const rod = new THREE.Mesh(geo("rod", () => new THREE.CylinderGeometry(0.05, 0.05, 1.5, 6)), dark);
+  rod.position.set(0, 1.9, 0);
+  rod.rotation.x = -0.62;
+  dish.add(rod);
+  dish.position.set(0, 3.6, -0.75);
+  V.tilt.add(dish);
+  V.dish = dish;
+
+  // hydraulic anchor legs (visible while anchored)
+  const legG = geo("leg", () => new THREE.CylinderGeometry(0.16, 0.22, 1, 7));
+  for (let sx = -1; sx <= 1; sx += 2) {
+    for (let sz = -1; sz <= 1; sz += 2) {
+      const leg = new THREE.Mesh(legG, steel);
+      leg.position.set(sx * 1.9, 1.1, sz * 2.4);
+      leg.scale.set(1, 0.1, 1);
+      leg.rotation.z = -sx * 0.5;
+      leg.rotation.x = sz * 0.35;
+      leg.visible = false;
+      V.tilt.add(leg);
+      V.legs.push({ mesh: leg, sx: sx, sz: sz });
+    }
+  }
+
+  V.root.add(V.tilt);
+  V.root.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(V.root);
+}
+
+function resetVehicle() {
+  vehicle.pos.set(MAP.spawn.x, 0, MAP.spawn.z);
+  vehicle.pos.y = terrainH(MAP.spawn.x, MAP.spawn.z);
+  vehicle.vel.set(0, 0, 0);
+  vehicle.vy = 0;
+  vehicle.heading = MAP.spawn.heading;
+  vehicle.yawRate = 0;
+  vehicle.speed = 0;
+  vehicle.health = CFG.VEHICLE.maxHealth;
+  vehicle.anchored = false;
+  vehicle.anchorCharge = 1;
+  vehicle.anchorLock = 0;
+  vehicle.stunned = 0;
+  vehicle.airborne = false;
+  vehicle.iFrames = 0;
+  vehicle.root.position.copy(vehicle.pos);
+  vehicle.root.rotation.y = vehicle.heading;
+  vehicle.tilt.rotation.set(0, 0, 0);
+}
+
+const _fwd = new THREE.Vector3();
+function forwardVec(heading, out) { return out.set(Math.sin(heading), 0, Math.cos(heading)); }
+
+function updateVehicle(dt) {
+  const V = vehicle, C = CFG.VEHICLE;
+  const gameLive = state === "PLAYING";
+
+  // ---- input ----
+  const stunned = V.stunned > 0;
+  if (V.stunned > 0) V.stunned -= dt;
+  if (V.anchorLock > 0) V.anchorLock -= dt;
+  const throttle = (gameLive && !stunned) ? (input.up ? 1 : 0) - (input.down ? 1 : 0) : 0;
+  const steerIn = (gameLive && !stunned) ? (input.left ? 1 : 0) - (input.right ? 1 : 0) : 0;
+
+  // ---- hydraulic anchor: finite reserve, and EF3+ suction can rip it out ----
+  const wantAnchor = gameLive && input.anchor && V.anchorLock <= 0 && V.anchorCharge > 0.02;
+  const p = vortexParams();
+  const dT = nearestVortexDist(V.pos.x, V.pos.z);
+  if (wantAnchor) {
+    V.anchorCharge = Math.max(0, V.anchorCharge - dt / CFG.ANCHOR.drainSeconds);
+    // deep inside a strong funnel the ground gives way under the jacks
+    if (dT < p.liftR * 1.1 && storm.intensity > CFG.ANCHOR.ripIntensity) {
+      V.anchorLock = CFG.ANCHOR.lockSeconds;
+      V.anchored = false;
+      status("ANCHORS RIPPED OUT — STORM TOO STRONG", 1.6);
+      SFX.one("rip");
+    } else {
+      V.anchored = true;
+    }
+  } else {
+    V.anchored = false;
+    V.anchorCharge = Math.min(1, V.anchorCharge + dt / CFG.ANCHOR.rechargeSeconds);
+  }
+
+  if (V.anchored !== SFX.lastAnchored) {
+    SFX.one(V.anchored ? "anchor" : "stow");
+    SFX.lastAnchored = V.anchored;
+  }
+
+  forwardVec(V.heading, _fwd);
+
+  // decompose velocity into forward / lateral components
+  const fwdSpeed = V.vel.x * _fwd.x + V.vel.z * _fwd.z;
+  const latX = V.vel.x - _fwd.x * fwdSpeed;
+  const latZ = V.vel.z - _fwd.z * fwdSpeed;
+  V.speed = fwdSpeed;
+
+  if (V.anchored) {
+    V.vel.set(0, 0, 0);
+    V.yawRate += (0 - V.yawRate) * (1 - Math.exp(-14 * dt));
+    V.speed = 0;
+    if (V.airborne) V.vy -= 60 * dt; // anchors cannot hold in the air; drop fast
+  } else {
+    // engine / brake
+    if (throttle > 0) {
+      V.vel.addScaledVector(_fwd, C.accel * dt * (V.airborne ? 0.12 : 1));
+    } else if (throttle < 0) {
+      if (fwdSpeed > 1.0) {
+        V.vel.addScaledVector(_fwd, -C.brake * dt);          // brake first
+      } else {
+        V.vel.addScaledVector(_fwd, -C.reverse * dt * (V.airborne ? 0.12 : 1));
+      }
+    }
+    // rolling drag — wading through a flooded channel drags hard
+    const wading = MAP.water && !V.airborne
+      && terrainH(V.pos.x, V.pos.z) < MAP.water.level + 0.35;
+    V.inWater = !!wading;
+    const drag = V.airborne ? 0.25 : (wading ? 2.6 : C.rollDrag);
+    if (wading) V.vel.multiplyScalar(1 - Math.min(1, 1.4 * dt));
+    V.vel.x -= V.vel.x * drag * dt;
+    V.vel.z -= V.vel.z * drag * dt;
+
+    // lateral grip (kills side-slip; weaker airborne)
+    const grip = V.airborne ? 0.6 : C.gripDamp;
+    const latDamp = 1 - Math.exp(-grip * dt);
+    V.vel.x -= latX * latDamp;
+    V.vel.z -= latZ * latDamp;
+
+    // steering with smooth angular damping
+    const gripFactor = clamp(Math.abs(fwdSpeed) / 9, 0, 1) * (V.airborne ? 0.25 : 1);
+    const dir = fwdSpeed < -0.4 ? -1 : 1;
+    const targetYaw = steerIn * C.turnRate * gripFactor * dir;
+    V.yawRate += (targetYaw - V.yawRate) * (1 - Math.exp(-9 * dt));
+  }
+
+  // ---- vortex force field (anchors are immune) ----
+  if (!V.anchored) {
+    vortexForce(V.pos.x, V.pos.y, V.pos.z, 1 / 2.6, _vf);
+    V.vel.x += _vf.x * dt;
+    V.vel.z += _vf.z * dt;
+    V.vy += _vf.y * dt;
+  }
+
+  // ---- vertical integration ----
+  const groundY = terrainH(V.pos.x, V.pos.z);
+  if (!V.anchored) {
+    V.vy += CFG.GRAVITY * dt;
+  }
+  V.pos.y += V.vy * dt;
+
+  if (V.pos.y <= groundY) {
+    const impact = -V.vy;
+    V.pos.y = groundY;
+    if (V.airborne && impact > 16) {
+      // hard landing counts as a high-velocity collision
+      damage((impact - 16) * 0.9, "HARD LANDING");
+    }
+    V.vy = 0;
+    V.airborne = false;
+  } else if (V.pos.y > groundY + 0.22) {
+    V.airborne = true;
+  }
+
+  // ---- horizontal integration ----
+  V.pos.x += V.vel.x * dt;
+  V.pos.z += V.vel.z * dt;
+  V.heading += V.yawRate * dt;
+
+  // hard speed cap (arcade feel, keeps the funnel survivable)
+  const sp = Math.hypot(V.vel.x, V.vel.z);
+  if (sp > C.maxSpeed) { V.vel.multiplyScalar(C.maxSpeed / sp); }
+
+  // arena bounds
+  const lim = CFG.HALF - 4;
+  if (V.pos.x < -lim) { V.pos.x = -lim; V.vel.x = Math.abs(V.vel.x) * 0.3; }
+  if (V.pos.x > lim) { V.pos.x = lim; V.vel.x = -Math.abs(V.vel.x) * 0.3; }
+  if (V.pos.z < -lim) { V.pos.z = -lim; V.vel.z = Math.abs(V.vel.z) * 0.3; }
+  if (V.pos.z > lim) { V.pos.z = lim; V.vel.z = -Math.abs(V.vel.z) * 0.3; }
+
+  // ---- visual transform ----
+  V.root.position.copy(V.pos);
+  V.root.rotation.y = V.heading;
+
+  const rollTarget = clamp(-V.yawRate * 0.16 - latX * 0.02 + latZ * 0.02, -0.16, 0.16);
+  const pitchTarget = clamp(-throttle * 0.045 - (V.airborne ? V.vy * 0.004 : 0), -0.2, 0.2);
+  V.tilt.rotation.z += (rollTarget - V.tilt.rotation.z) * (1 - Math.exp(-8 * dt));
+  V.tilt.rotation.x += (pitchTarget - V.tilt.rotation.x) * (1 - Math.exp(-8 * dt));
+
+  // wheels: spin with travel, steer the front/rear axles for a 6-wheel crab look
+  V.wheelSpin -= fwdSpeed * dt * 1.15;
+  for (let i = 0; i < V.wheels.length; i++) {
+    const w = V.wheels[i];
+    w.g.rotation.x = V.wheelSpin;
+    const steerAngle = steerIn * (w.z > 1 ? 0.42 : w.z < -1 ? -0.3 : 0);
+    w.g.rotation.y += (steerAngle - w.g.rotation.y) * (1 - Math.exp(-10 * dt));
+    w.g.position.y = 0.86 + (V.airborne ? 0.12 : Math.sin(storm.time * 9 + i) * 0.015);
+  }
+
+  // doppler dish keeps scanning
+  if (V.dish) V.dish.rotation.y += dt * 1.35;
+
+  // anchor legs
+  for (let i = 0; i < V.legs.length; i++) {
+    const L = V.legs[i];
+    const want = V.anchored && !V.airborne ? 1 : 0;
+    const cur = L.mesh.scale.y;
+    const nv = cur + (want * 1.15 - cur) * (1 - Math.exp(-12 * dt));
+    L.mesh.scale.y = Math.max(0.08, nv);
+    L.mesh.visible = nv > 0.12;
+    L.mesh.position.y = 1.1 - (nv - 0.08) * 0.45;
+  }
+
+  if (V.iFrames > 0) V.iFrames -= dt;
+}
+
+/* =========================================================================
+   8. DEBRIS (integrated physics engine)
+   ========================================================================= */
+
+function spawnDebris(obj, pos, vel, mass, radius) {
+  // reparent the prop mesh to the scene so it can fly free
+  scene.attach(obj);
+  const body = {
+    obj: obj,
+    pos: pos.clone(),
+    vel: vel.clone(),
+    angVel: new THREE.Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12),
+    mass: mass,
+    radius: radius,
+    life: 0,
+    maxLife: 16,
+    hitCd: 0,
+    settled: false,
+    settleTimer: 0
+  };
+  obj.position.copy(pos);
+  debris.push(body);
+  capDebris();
+  return body;
+}
+
+/* A funnel crossing a props field can loft dozens of bodies at once, and each
+   one is a Group of meshes paid for twice (shadow pass + main pass). The cap
+   bounds the draw-call count by evicting what the player is least likely to
+   still be looking at: settled bodies farthest from the rover, and if nothing
+   has settled yet, the oldest. */
+function capDebris() {
+  while (debris.length > Q.debrisCap) {
+    let idx = -1, far = -1;
+    for (let i = 0; i < debris.length; i++) {
+      const b = debris[i];
+      if (!b.settled) continue;
+      const d = Math.hypot(b.pos.x - vehicle.pos.x, b.pos.z - vehicle.pos.z);
+      if (d > far) { far = d; idx = i; }
+    }
+    if (idx < 0) idx = 0;
+    scene.remove(debris[idx].obj);
+    debris.splice(idx, 1);
+  }
+}
+
+function updateDebris(dt) {
+  for (let i = debris.length - 1; i >= 0; i--) {
+    const b = debris[i];
+    b.life += dt;
+    if (b.hitCd > 0) b.hitCd -= dt;
+
+    if (!b.settled) {
+      vortexForce(b.pos.x, b.pos.y, b.pos.z, 1 / Math.max(0.35, b.mass), _vf);
+      b.vel.x += _vf.x * dt;
+      b.vel.y += _vf.y * dt;
+      b.vel.z += _vf.z * dt;
+      b.vel.y += CFG.GRAVITY * dt;
+
+      // air drag keeps debris controllable
+      const d = 1 - Math.exp(-0.55 * dt);
+      b.vel.x -= b.vel.x * d; b.vel.z -= b.vel.z * d;
+      b.vel.y -= b.vel.y * d * 0.35;
+    }
+
+    b.pos.addScaledVector(b.vel, dt);
+
+    const groundY = terrainH(b.pos.x, b.pos.z) + b.radius * 0.35;
+    if (b.pos.y <= groundY) {
+      b.pos.y = groundY;
+      if (b.vel.y < -3) {
+        b.vel.y = -b.vel.y * 0.34;                 // bounce
+        b.vel.x *= 0.72; b.vel.z *= 0.72;
+      } else {
+        b.vel.y = 0;
+        b.vel.x *= 1 - Math.min(1, 6 * dt);        // ground friction
+        b.vel.z *= 1 - Math.min(1, 6 * dt);
+        const planar = Math.hypot(b.vel.x, b.vel.z);
+        const nearVortex = insideAnyVortex(b.pos.x, b.pos.z, vortexParams().pullR);
+        if (planar < 0.6 && !nearVortex) {
+          b.settled = true;
+          b.settleTimer += dt;
+        }
+      }
+    }
+
+    b.obj.position.copy(b.pos);
+    b.obj.rotation.x += b.angVel.x * dt;
+    b.obj.rotation.y += b.angVel.y * dt;
+    b.obj.rotation.z += b.angVel.z * dt;
+
+    // collision with the rover
+    if (state === "PLAYING" && b.hitCd <= 0) {
+      const dx = b.pos.x - vehicle.pos.x;
+      const dz = b.pos.z - vehicle.pos.z;
+      const dy = b.pos.y - (vehicle.pos.y + 1.6);
+      const rr = b.radius + 2.5;
+      if (dx * dx + dz * dz < rr * rr && Math.abs(dy) < 3.4) {
+        const relX = b.vel.x - vehicle.vel.x;
+        const relZ = b.vel.z - vehicle.vel.z;
+        const rel = Math.hypot(relX, relZ, b.vel.y);
+        if (rel > 4) {
+          damage(clamp(rel * 0.62 * b.mass * 0.6, 2, CFG.VEHICLE.hitCap), "DEBRIS IMPACT", b.pos.x, b.pos.z);
+          b.hitCd = 0.45;
+          // bounce the debris off the hull
+          b.vel.x = relX * -0.35 + vehicle.vel.x * 0.5;
+          b.vel.z = relZ * -0.35 + vehicle.vel.z * 0.5;
+          b.vel.y = Math.abs(b.vel.y) * 0.3 + 5;
+          b.angVel.multiplyScalar(1.4);
+          shake.set((Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6);
+        }
+      }
+    }
+
+    // fade + retire
+    let dead = b.life > b.maxLife || Math.abs(b.pos.x) > CFG.HALF + 30 || Math.abs(b.pos.z) > CFG.HALF + 30 || b.pos.y > 70;
+    if (b.settled) {
+      b.settleTimer += dt;
+      if (b.settleTimer > 6) dead = true;
+    }
+    if (dead) {
+      scene.remove(b.obj);
+      debris.splice(i, 1);
+    } else if (b.life > b.maxLife - 2.5) {
+      const f = clamp((b.maxLife - b.life) / 2.5, 0, 1);
+      b.obj.scale.setScalar(f);
+    }
+  }
+}
+
+// props caught by the funnel detach into free-flying debris
+function updateProps() {
+  const p = vortexParams();
+  for (let i = props.length - 1; i >= 0; i--) {
+    const pr = props[i];
+    if (!pr.alive) continue;
+    const v = nearestVortex(pr.pos.x, pr.pos.z);
+    if (!v) continue;
+    const dx = v.pos.x - pr.pos.x;
+    const dz = v.pos.z - pr.pos.z;
+    const d = Math.hypot(dx, dz);
+    if (d >= p.liftR * 1.55) continue;
+
+    pr.alive = false;
+    const up = new THREE.Vector3(
+      (Math.random() - 0.5) * 8,
+      9 + Math.random() * 12 + p.k * 8,
+      (Math.random() - 0.5) * 8
+    );
+    // tangential kick so the debris immediately orbits the funnel
+    const inv = 1 / Math.max(d, 0.001);
+    up.x += -dz * inv * 14 * p.k;
+    up.z += dx * inv * 14 * p.k;
+    spawnDebris(pr.obj, pr.pos, up, pr.mass, pr.radius);
+    props.splice(i, 1);
+  }
+  // rover vs static props
+  if (state !== "PLAYING") return;
+  for (let i = props.length - 1; i >= 0; i--) {
+    const pr = props[i];
+    const dx = vehicle.pos.x - pr.pos.x;
+    const dz = vehicle.pos.z - pr.pos.z;
+    const rr = pr.radius + 2.3;
+    if (dx * dx + dz * dz > rr * rr) continue;
+    const sp = Math.hypot(vehicle.vel.x, vehicle.vel.z);
+    if (sp > 9 && !vehicle.anchored) {
+      pr.alive = false;
+      const v = new THREE.Vector3(vehicle.vel.x, 6 + sp * 0.35, vehicle.vel.z).multiplyScalar(0.85);
+      spawnDebris(pr.obj, pr.pos, v, pr.mass, pr.radius);
+      props.splice(i, 1);
+      damage(Math.min((sp - 8) * 1.5, CFG.VEHICLE.hitCap), "PROP COLLISION", pr.pos.x, pr.pos.z);
+      vehicle.vel.multiplyScalar(0.55);
+    } else {
+      // soft push-out
+      const d = Math.max(0.001, Math.hypot(dx, dz));
+      vehicle.pos.x += (dx / d) * (rr - d) * 0.6;
+      vehicle.pos.z += (dz / d) * (rr - d) * 0.6;
+      vehicle.vel.multiplyScalar(0.72);
+    }
+  }
+}
+
+/* =========================================================================
+   9. PROBES
+   ========================================================================= */
+const probeGroup = new THREE.Group();
+scene.add(probeGroup);
+
+function deployProbe() {
+  if (probesLeft <= 0) {
+    status("NO PROBES REMAINING", 1.2);
+    return;
+  }
+  if (state !== "PLAYING") return;
+  forwardVec(vehicle.heading, _fwd);
+  const p = new THREE.Vector3(
+    vehicle.pos.x - _fwd.x * 3.4,
+    0,
+    vehicle.pos.z - _fwd.z * 3.4
+  );
+  p.y = terrainH(p.x, p.z);
+
+  const g = new THREE.Group();
+  const baseM = mat("probeBase", () => flatMat(0x2f3a44));
+  const base = new THREE.Mesh(geo("probeBase", () => new THREE.CylinderGeometry(0.55, 0.72, 0.34, 8)), baseM);
+  base.position.y = 0.17;
+  g.add(base);
+  const coreM = mat("probeCore", () => new THREE.MeshBasicMaterial({ color: 0x8ffcff }));
+  const core = new THREE.Mesh(geo("probeCore", () => new THREE.IcosahedronGeometry(0.42, 0)), coreM);
+  core.position.y = 0.95;
+  g.add(core);
+  const mastG = geo("probeMast", () => new THREE.CylinderGeometry(0.09, 0.09, 0.7, 6));
+  const mast = new THREE.Mesh(mastG, mat("probeMast", () => flatMat(0x8899a6)));
+  mast.position.y = 0.55;
+  g.add(mast);
+  const halo = new THREE.Mesh(
+    geo("probeHalo", () => new THREE.SphereGeometry(0.95, 12, 10)),
+    mat("probeHalo", () => new THREE.MeshBasicMaterial({
+      color: 0x4fe3ff, transparent: true, opacity: 0.24, depthWrite: false, blending: THREE.AdditiveBlending
+    }))
+  );
+  halo.position.y = 0.95;
+  g.add(halo);
+  const beamG = geo("probeBeam", () => new THREE.CylinderGeometry(0.5, 1.4, 9, 10, 1, true));
+  const beam = new THREE.Mesh(beamG, new THREE.MeshBasicMaterial({
+    color: 0x4fe3ff, transparent: true, opacity: 0.13,
+    side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending
+  }));
+  beam.position.y = 5.2;
+  g.add(beam);
+
+  g.position.copy(p);
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  probeGroup.add(g);
+
+  probes.push({
+    obj: g, pos: p, core: core, halo: halo, hp: 100,
+    rate: 0, born: performance.now() * 0.001
+  });
+  probesLeft--;
+  status("PROBE DEPLOYED — UPLINK ACTIVE", 1.6);
+  SFX.one("probe");
+}
+
+function updateProbes(dt) {
+  for (let i = probes.length - 1; i >= 0; i--) {
+    const pr = probes[i];
+    const d = nearestVortexDist(pr.pos.x, pr.pos.z);
+    // Banded uplink. Inside 5u is the core gambit: 12%/s, but the probe burns
+    // three times as fast, so it is a burst, not a camping spot.
+    const coreUpload = d < CFG.UPLOAD.core;
+    pr.rate = coreUpload ? CFG.UPLOAD.coreRate
+            : d < CFG.UPLOAD.near ? CFG.UPLOAD.nearRate
+            : d < CFG.UPLOAD.mid ? CFG.UPLOAD.midRate : CFG.UPLOAD.farRate;
+    pr.coreUpload = coreUpload;
+
+    if (state === "PLAYING") {
+      // The probes are independent field instruments. Killing their uplink
+      // outright every time the ROVER got stunned stacked a second punishment
+      // on top of the first and made the pool impossible to fill.
+      const outage = vehicle.stunned > 0 ? 0.5 : 1;
+      dataLevel = Math.min(CFG.DATA_TARGET, dataLevel + pr.rate * TIER.dataRate * outage * dt);
+    }
+
+    // The vortex grinds a probe down when it passes over it. No instant kill:
+    // a probe under the core still uplinks fast while it lasts, which is the
+    if (d < 12) pr.hp -= (11 + 13 * storm.intensity) * (coreUpload ? 3 : 1) * dt;
+    if (pr.hp <= 0) {
+      probeGroup.remove(pr.obj);
+      probes.splice(i, 1);
+      continue;
+    }
+
+    const pulse = 0.75 + Math.sin(performance.now() * 0.006 + i) * 0.25;
+    pr.halo.scale.setScalar(pulse);
+    pr.core.rotation.y += dt * 2.2;
+    pr.core.rotation.x += dt * 1.4;
+    pr.obj.position.y = pr.pos.y + Math.sin(performance.now() * 0.004 + i) * 0.05;
+  }
+}
+
+/* =========================================================================
+   10. RAIN + LIGHTNING
+   ========================================================================= */
+let rain = null, rainData = null;
+function buildRain() {
+  const g = new THREE.BufferGeometry();
+  const arr = new Float32Array(RAIN_N * 6);
+  const data = new Array(RAIN_N);
+  for (let i = 0; i < RAIN_N; i++) {
+    data[i] = {
+      x: (Math.random() - 0.5) * 160,
+      y: Math.random() * 55,
+      z: (Math.random() - 0.5) * 160,
+      s: 26 + Math.random() * 22
+    };
+  }
+  g.setAttribute("position", new THREE.BufferAttribute(arr, 3));
+  const m = new THREE.LineBasicMaterial({ color: 0x9fc4d8, transparent: true, opacity: 0.35 });
+  rain = new THREE.LineSegments(g, m);
+  rain.frustumCulled = false;
+  rain.geometry.setDrawRange(0, rainActive * 2);
+  scene.add(rain);
+  rainData = data;
+}
+
+function updateRain(dt) {
+  const arr = rain.geometry.attributes.position.array;
+  const cx = camLook.x, cz = camLook.z;
+  for (let i = 0; i < rainActive; i++) {
+    const d = rainData[i];
+    d.y -= d.s * dt;
+    d.x += 5 * dt;
+    if (d.y < terrainH(d.x, d.z)) {
+      d.y = 45 + Math.random() * 12;
+      d.x = cx + (Math.random() - 0.5) * 150;
+      d.z = cz + (Math.random() - 0.5) * 150;
+    }
+    // wrap the rain box around the camera target
+    if (d.x - cx > 75) d.x -= 150; else if (d.x - cx < -75) d.x += 150;
+    if (d.z - cz > 75) d.z -= 150; else if (d.z - cz < -75) d.z += 150;
+
+    const o = i * 6;
+    arr[o] = d.x; arr[o + 1] = d.y; arr[o + 2] = d.z;
+    arr[o + 3] = d.x + 0.35; arr[o + 4] = d.y - 2.4; arr[o + 5] = d.z + 0.5;
+  }
+  rain.geometry.attributes.position.needsUpdate = true;
+}
+
+let lightningTimer = 3;
+let strikeCooldown = 0;
+
+/* A strike is called down on the rover's current position and lands warn
+   seconds later, marked by a collapsing ground ring. That single change turns
+   lightning from a dice roll you watch happen into something you drive out
+   of, and lets the hit scale with how much of the warning you wasted. */
+const strike = { pending: false, x: 0, z: 0, t: 0, marker: null };
+
+function strikeMarker() {
+  if (strike.marker) return strike.marker;
+  const g = new THREE.RingGeometry(1, 1.13, 44);
+  g.rotateX(-Math.PI / 2);
+  const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    color: 0xffe9a0, transparent: true, opacity: 0.6, side: THREE.DoubleSide,
+    depthWrite: false, blending: THREE.AdditiveBlending
+  }));
+  mesh.visible = false;
+  mesh.frustumCulled = false;
+  scene.add(mesh);
+  strike.marker = mesh;
+  return mesh;
+}
+
+function callDownStrike() {
+  const S = MAP.strike;
+  strike.pending = true;
+  strike.t = S.warn;
+  strike.x = vehicle.pos.x;
+  strike.z = vehicle.pos.z;
+  const mk = strikeMarker();
+  mk.visible = true;
+  mk.position.set(strike.x, terrainH(strike.x, strike.z) + 0.3, strike.z);
+  status("LIGHTNING LOCKING ON — GET OUT OF THE RING", S.warn + 0.8);
+  SFX.one("warn");
+}
+
+function resolveStrike() {
+  const S = MAP.strike;
+  const d = Math.hypot(vehicle.pos.x - strike.x, vehicle.pos.z - strike.z);
+  strike.pending = false;
+  strike.marker.visible = false;
+  if (d > S.radius) { status("STRIKE EVADED", 1.4); return; }
+  // still standing in the circle when it closes is what costs you
+  const closeness = 1 - d / S.radius;
+  vehicle.stunned = S.stunSeconds * (0.45 + 0.55 * closeness);
+  vehicle.anchored = false;
+  damage(S.damage * (0.55 + 0.45 * closeness), "LIGHTNING STRIKE");
+  shake.set(3.2, 3.2, 3.2);
+}
+
+function updateLightning(dt) {
+  lightningTimer -= dt;
+  if (strikeCooldown > 0) strikeCooldown -= dt;
+
+  if (strike.pending && state !== "PLAYING") {
+    // the run ended between the warning and the bolt: cancel, do not stun a
+    // wreck and leave a glowing ring sitting under the end card
+    strike.pending = false;
+    strike.marker.visible = false;
+  }
+  if (strike.pending && MAP.strike) {
+    const S = MAP.strike;
+    strike.t -= dt;
+    const k = clamp(strike.t / S.warn, 0, 1);
+    const sc = S.radius * (0.55 + 0.45 * k);
+    strike.marker.scale.set(sc, 1, sc);
+    strike.marker.material.opacity = 0.35 + 0.5 * (1 - k);
+    if (strike.t <= 0) resolveStrike();
+  }
+
+  if (lightningTimer <= 0) {
+    const flashing = lightningTimer > -0.08;
+    if (flashing) {
+      sun.intensity = LIGHT_BASE.sun * 4.0;
+      ambient.intensity = LIGHT_BASE.ambient * 1.7;
+      flashEl.style.opacity = "0.28";
+      SFX.thunder();
+      // Radar dropout is pure atmosphere; the strike itself is telegraphed
+      // above and resolved a beat later.
+      if (MAP.weatherRadarNoise && Math.random() < 0.5) radarBlackout = 0.45;
+      if (state === "PLAYING" && !strike.pending && strikeCooldown <= 0 && MAP.strike
+          && Math.random() < MAP.strike.chance) {
+        strikeCooldown = MAP.strike.cooldown;
+        callDownStrike();
+      }
+    } else {
+      sun.intensity = LIGHT_BASE.sun;
+      ambient.intensity = LIGHT_BASE.ambient;
+      flashEl.style.opacity = "0";
+      lightningTimer = LIGHTNING_GAP[0] + Math.random() * (LIGHTNING_GAP[1] - LIGHTNING_GAP[0]);
+    }
+  }
+}
+
+/* =========================================================================
+   11. INPUT
+   ========================================================================= */
+const input = { up: false, down: false, left: false, right: false, anchor: false };
+const KEYMAP = {
+  KeyW: "up", ArrowUp: "up",
+  KeyS: "down", ArrowDown: "down",
+  KeyA: "left", ArrowLeft: "left",
+  KeyD: "right", ArrowRight: "right"
+};
+/* A key means something different on every screen, so it is routed in one
+   place. Two rules worth keeping: a focused button owns SPACE and ENTER (do
+   not preventDefault them away or the menu becomes keyboard-unreachable), and
+   R only restarts once a mission actually exists. */
+function buttonHasFocus() {
+  const ae = document.activeElement;
+  return !!(ae && ae.tagName === "BUTTON");
+}
+
+window.addEventListener("keydown", e => {
+  if (KEYMAP[e.code]) { input[KEYMAP[e.code]] = true; e.preventDefault(); return; }
+
+  if (e.code === "Space") {
+    input.anchor = true;
+    if (!buttonHasFocus()) e.preventDefault();
+    return;
+  }
+  if (e.code === "KeyE") {
+    if (state === "PLAYING") deployProbe();
+    e.preventDefault();
+    return;
+  }
+  if (e.code === "KeyR") {
+    if (state === "PLAYING" || state === "VICTORY" || state === "GAME_OVER") startGame();
+    return;
+  }
+  if (e.code === "Enter") {
+    if (buttonHasFocus()) return;                 // the button's own click runs it
+    if (state !== "PLAYING" && state !== "LOADING") { e.preventDefault(); primaryAction(); }
+    return;
+  }
+  if (e.code === "Escape") {
+    if (state !== "PLAYING" && state !== "LOADING") { e.preventDefault(); secondaryAction(); }
+  }
+});
+window.addEventListener("keyup", e => {
+  if (KEYMAP[e.code]) { input[KEYMAP[e.code]] = false; e.preventDefault(); }
+  if (e.code === "Space") {
+    input.anchor = false;
+    if (!buttonHasFocus()) e.preventDefault();
+  }
+});
+window.addEventListener("blur", () => {
+  input.up = input.down = input.left = input.right = input.anchor = false;
+});
+
+/* Audio is gesture-locked by the browser, and a click anywhere counts. Both
+   listeners are passive: they never cancel input. */
+window.addEventListener("pointerdown", () => SFX.unlock(), { passive: true });
+window.addEventListener("keydown", () => SFX.unlock(), { passive: true });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) SFX.suspend(); else SFX.resume();
+});
+
+/* =========================================================================
+   12. GAME STATE / HUD / MINIMAP
+   ========================================================================= */
+/* state is the single source of truth for what the player is looking at:
+   LOADING -> MENU -> BRIEF -> PLAYING -> VICTORY / GAME_OVER, with HELP and
+   SETTINGS hanging off MENU. Anything that is not PLAYING leaves the
+   simulation idling behind the card instead of pausing the render loop. */
+let state = "LOADING";
+let screenName = "menu";
+let booting = false;
+let grindSfxT = 0;
+let dataLevel = 0;
+let elapsed = 0;
+let peakProximity = Infinity;
+let statusTimer = 0;
+let statusText = "";
+
+const el = {
+  dataFill: document.getElementById("dataFill"),
+  dataVal: document.getElementById("dataVal"),
+  hullFill: document.getElementById("hullFill"),
+  hullBar: document.getElementById("hullBar"),
+  hullVal: document.getElementById("hullVal"),
+  anchorTag: document.getElementById("anchorTag"),
+  anchorCharge: document.getElementById("anchorCharge"),
+  anchorFill: document.getElementById("anchorFill"),
+  speedVal: document.getElementById("speedVal"),
+  probeVal: document.getElementById("probeVal"),
+  probeDots: document.getElementById("probeDots"),
+  statusLine: document.getElementById("statusLine"),
+  efVal: document.getElementById("efVal"),
+  efPips: document.getElementById("efPips"),
+  timerVal: document.getElementById("timerVal"),
+  extractLabel: document.getElementById("extractLabel"),
+  stGrade: document.getElementById("stGrade"),
+  screen: document.getElementById("screen"),
+  title: document.getElementById("title"),
+  subtitle: document.getElementById("subtitle"),
+  bigTitle: document.getElementById("bigTitle"),
+  cardBody: document.getElementById("cardBody"),
+  stats: document.getElementById("stats"),
+  stTime: document.getElementById("stTime"),
+  stProx: document.getElementById("stProx"),
+  stData: document.getElementById("stData"),
+  btn: document.getElementById("btn"),
+  btnAlt: document.getElementById("btnAlt"),
+  card: document.getElementById("card"),
+  brandMark: document.getElementById("brandMark"),
+  setup: document.getElementById("setup"),
+  menuList: document.getElementById("menuList"),
+  opts: document.getElementById("opts"),
+  bestLine: document.getElementById("bestLine"),
+  hud: document.getElementById("hud"),
+  qPill: document.getElementById("qPill"),
+  windVig: document.getElementById("windVig"),
+  dmgDir: document.getElementById("dmgDir"),
+  dmgDirLabel: document.querySelector("#dmgDir > u"),
+  mkStorm: document.getElementById("mkStorm"),
+  mkStormArrow: document.querySelector("#mkStorm > .arrow"),
+  mkExfil: document.getElementById("mkExfil"),
+  mkExfilArrow: document.querySelector("#mkExfil > .arrow"),
+  fatal: document.getElementById("fatal")
+};
+const flashEl = document.getElementById("flash");
+const dmgEl = document.getElementById("dmgFlash");
+
+for (let i = 0; i < 4; i++) {
+  const p = document.createElement("div");
+  p.className = "pip";
+  el.efPips.appendChild(p);
+}
+function buildProbeDots(count) {
+  el.probeDots.innerHTML = "";
+  for (let i = 0; i < count; i++) {
+    const d = document.createElement("div");
+    d.className = "pdot";
+    d.style.width = (30 - Math.max(0, count - 3) * 3) + "px";
+    el.probeDots.appendChild(d);
+  }
+}
+buildProbeDots(CFG.PROBES_START);
+
+function status(msg, seconds) { statusText = msg; statusTimer = seconds || 1.5; }
+
+/* srcX/srcZ are optional: when the caller knows where the hit came from the
+   screen-edge wedge can point at it. Overhead hits (lightning, hard landings)
+   pass nothing and simply skip the bearing. */
+function damage(amount, cause, srcX, srcZ) {
+  if (state !== "PLAYING") return;
+  if (vehicle.iFrames > 0) return;
+  vehicle.health = Math.max(0, vehicle.health - amount * TIER.dmg);
+  vehicle.iFrames = CFG.VEHICLE.hitIFrames;
+  dmgEl.style.opacity = String(clamp(amount / 22, 0.25, 1));
+  setTimeout(() => { dmgEl.style.opacity = "0"; }, 150);
+  if (amount > 6) status("HULL BREACH — " + cause, 1.4);
+  roverFlash(clamp(amount / 16, 0.3, 1));
+  hitDirection(srcX, srcZ, cause);
+  SFX.one(amount > 12 ? "hull" : "impact");
+  if (vehicle.health <= 0) endGame(false);
+}
+
+function endGame(victory, reason) {
+  if (state !== "PLAYING") return;
+  state = victory ? "VICTORY" : "GAME_OVER";
+  const mins = Math.floor(elapsed / 60);
+  const secs = Math.floor(elapsed % 60);
+  const grade = victory ? computeGrade() : null;
+  el.stTime.textContent = mins + ":" + String(secs).padStart(2, "0");
+  el.stProx.textContent = peakProximity === Infinity ? "--" : Math.round(peakProximity) + "m";
+  el.stData.textContent = Math.round(dataLevel) + "%";
+  el.stGrade.textContent = grade ? grade.letter : "—";
+  el.stGrade.style.color = grade ? grade.color : "rgba(207,233,245,.5)";
+  el.stats.style.display = "grid";
+  el.title.textContent = victory ? "EXTRACTION COMPLETE" : (reason || "VEHICLE LOST");
+  el.title.style.color = victory ? "var(--green)" : "var(--red)";
+  el.subtitle.textContent = MAP.name + " // " + TIER.name + (victory ? " // EXTRACTED" : " // LOST");
+  el.bigTitle.textContent = victory
+    ? "Grade " + grade.letter + " — " + grade.blurb
+    : "The rover broke apart inside the funnel.";
+  el.cardBody.innerHTML = victory
+    ? "Extraction confirmed. Peak vortex proximity <span class='k'>" + Math.round(peakProximity) +
+      "m</span>, uplink completed with <span class='k'>" + Math.round(dataLevel) + "%</span> research data " +
+      "and <span class='k'>" + Math.round(vehicle.health) + "%</span> hull remaining.<br />" +
+      "Score <span class='k'>" + grade.score + "</span> — " + grade.detail
+    : (reason === "PAYLOAD LOST"
+        ? "The extraction window lapsed and the payload cooked off in the storm. " +
+          "Fill the pool earlier, or start the run to the bunker before the last probe dies."
+        : "Hull integrity reached zero at <span class='k'>" + Math.round(dataLevel) +
+          "%</span> data. Anchors are a finite reserve now — spend them on the way out, " +
+          "not sitting in the debris stream.");
+  saveBest(grade);
+  SFX.one(victory ? "win" : "lose");
+  input.up = input.down = input.left = input.right = input.anchor = false;
+  showScreen("end");
+}
+
+// Grade rewards the behaviour the game is actually about: getting close,
+// getting out fast, and bringing the rover home in one piece.
+function computeGrade() {
+  const hull = clamp(vehicle.health, 0, 100);
+  const prox = peakProximity === Infinity ? 999 : peakProximity;
+  const proxPts = Math.round(clamp((40 - prox) / 40, 0, 1) * 400);
+  const hullPts = Math.round(hull * 3);
+  const timePts = Math.round(clamp((180 - elapsed) / 180, 0, 1) * 300);
+  const score = proxPts + hullPts + timePts;
+  let letter = "D", blurb = "you made it out", color = "#cfe9f5";
+  if (score >= 700) { letter = "S"; blurb = "textbook intercept"; color = "#3ff08a"; }
+  else if (score >= 560) { letter = "A"; blurb = "clean extraction"; color = "#9bff6a"; }
+  else if (score >= 420) { letter = "B"; blurb = "by the book"; color = "#4fe3ff"; }
+  else if (score >= 280) { letter = "C"; blurb = "you made it out"; color = "#ffb648"; }
+  return {
+    letter: letter, blurb: blurb, color: color, score: score,
+    detail: "proximity " + Math.round(proxPts) + " + hull " + Math.round(hullPts) +
+            " + speed " + Math.round(timePts)
+  };
+}
+
+/* =========================================================================
+   12.7  SCREENS, LOADING SEQUENCE AND BOOT
+   ---------------------------------------------------------------------------
+   One overlay (#screen) and one card (#card) serve MENU / BRIEF / HELP /
+   SETTINGS / END, and #loading sits above them all. Every GPU-facing build step
+   lives in BOOT_STAGES so the first boot and every re-deploy run the same code
+   in the same order — with a painted frame between stages, which is the only
+   reason the progress bar shows real work instead of a timer.
+   ========================================================================= */
+
+/* The briefing text ships in the HTML so the page is readable before any
+   script runs; it is captured here and restored whenever the BRIEF screen is
+   shown, which is how the other screens can reuse the same card. */
+const BRIEF_BODY = document.getElementById("cardBody").innerHTML;
+
+const HELP_BODY = `
+  <div class="keyTable">
+    <span class="kk">[W][A][S][D]</span><span>drive &nbsp;·&nbsp; <span class="k">[SPACE]</span> hold to anchor</span>
+    <span class="kk">[E]</span><span>deploy a data probe at the rover</span>
+    <span class="kk">[R]</span><span>restart the run &nbsp;·&nbsp; <span class="k">[ENTER]</span> confirm &nbsp;·&nbsp; <span class="k">[ESC]</span> back</span>
+  </div>
+  <br />
+  Drop <span class="k">DATA PROBES</span> near the funnel — the uplink pays in bands,
+  fastest inside <span class="k">5m</span> of the core, and the funnel grinds a probe
+  down while it sits there. Fill the pool to <span class="k">100%</span>, then reach the
+  <span class="k">EXFIL PAD</span> inside 45 seconds: once the payload is full the storm
+  stops wandering and hunts the rover.<br /><br />
+  <span class="k">[SPACE]</span> drives anchors into the ground for total immunity to
+  suction. The reserve lasts about six seconds and recharges slowly, and a strong
+  funnel inside the core rips them straight back out.<br /><br />
+  Your grade is mostly <span class="k">peak proximity</span>: the closest you get to the
+  funnel and live to talk about it.`;
+
+const TIPS = [
+  "<b>ANCHORS</b> are a reserve, not an immunity button — about six seconds of them, and a strong funnel rips them straight back out.",
+  "A probe inside <b>5m</b> of the core uplinks at <b>12%/s</b> but burns three times as fast. That is a burst, not a parking spot.",
+  "The moment the pool hits <b>100%</b> the storm stops wandering and comes looking for you. Start driving to the bunker before the last probe dies.",
+  "<b>PEAK PROXIMITY</b> is a third of the final grade. Driving around the outside of the funnel scores nothing."
+];
+
+/* ---- loading screen ---- */
+const LOAD = {
+  root: document.getElementById("loading"),
+  fill: document.querySelector("#ldBar > .fill"),
+  pct: document.getElementById("ldPct"),
+  stage: document.getElementById("ldStage"),
+  tip: document.getElementById("ldTip"),
+  q: document.getElementById("ldQ"),
+  engine: document.getElementById("ldEngine"),
+  target: 0, shown: 0, raf: 0, tipI: 0, tipTimer: 0,
+
+  init() {
+    this.engine.textContent = "THREE r128 · " + (window.__THREE_CDN ? "CDN" : "LOCAL");
+    this.buildArt();
+    this.showTip();
+    this.tipTimer = setInterval(() => this.showTip(), 2600);
+    this.startTicking();
+  },
+
+  /* The bar eases toward the real stage value, so one long blocking build step
+     never reads as a frozen loader. Owned by start/stopTicking because the
+     ticker has to survive several show/hide cycles, not just the first boot. */
+  startTicking() {
+    if (this.raf) return;
+    const tick = () => {
+      this.raf = requestAnimationFrame(tick);
+      this.shown += (this.target - this.shown) * 0.15;
+      if (this.target - this.shown < 0.2) this.shown = this.target;
+      this.fill.style.width = this.shown.toFixed(1) + "%";
+      this.pct.textContent = Math.round(this.shown) + "%";
+    };
+    this.raf = requestAnimationFrame(tick);
+  },
+  stopTicking() {
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    if (this.tipTimer) { clearInterval(this.tipTimer); this.tipTimer = 0; }
+  },
+
+  /* The funnel is stacked CSS ellipses that sway out of phase, which reads as
+     a rotating cone without needing the 3D context that may not exist yet. */
+  buildArt() {
+    const st = document.getElementById("ldStorm");
+    if (st && !st.childNodes.length) {
+      for (let i = 0; i < 11; i++) {
+        const f = i / 10;
+        const r = document.createElement("i");
+        r.style.width = (26 + f * f * 206).toFixed(0) + "px";
+        r.style.height = (7 + f * 13).toFixed(0) + "px";
+        r.style.bottom = (f * 184).toFixed(0) + "px";
+        r.style.opacity = (0.26 + f * 0.5).toFixed(2);
+        r.style.animationDuration = (1.1 + f * 1.9).toFixed(2) + "s";
+        r.style.animationDelay = (-f * 0.9).toFixed(2) + "s";
+        st.appendChild(r);
+      }
+      for (let i = 0; i < 9; i++) {
+        const b = document.createElement("b");
+        b.style.animationDuration = (0.9 + Math.random() * 1.6).toFixed(2) + "s";
+        b.style.animationDelay = (-Math.random() * 2).toFixed(2) + "s";
+        b.style.bottom = (6 + Math.random() * 118).toFixed(0) + "px";
+        st.appendChild(b);
+      }
+    }
+    const t = document.getElementById("ldTitle");
+    if (t && !t.querySelector("span")) {
+      const word = t.textContent;
+      t.textContent = "";
+      for (let i = 0; i < word.length; i++) {
+        const s = document.createElement("span");
+        s.textContent = word[i] === " " ? "\u00a0" : word[i];
+        s.style.setProperty("--i", String(i));
+        t.appendChild(s);
+      }
+    }
+  },
+
+  showTip() { this.tip.innerHTML = TIPS[this.tipI++ % TIPS.length]; },
+  set(pct, label) {
+    if (label) this.stage.textContent = label;
+    if (pct > this.target) this.target = pct;
+  },
+  reset(label) {
+    this.target = 0; this.shown = 0;
+    this.fill.style.width = "0%";
+    this.pct.textContent = "0%";
+    this.root.classList.remove("out", "failed");
+    this.root.classList.add("show");
+    if (!this.tipTimer) this.tipTimer = setInterval(() => this.showTip(), 2600);
+    this.startTicking();
+    this.set(3, label || "booting");
+  },
+  finish() {
+    return new Promise(res => {
+      this.set(100, "ready");
+      const step = () => {
+        if (this.shown < 99) { setTimeout(step, 40); return; }
+        this.root.classList.add("out");
+        setTimeout(() => {
+          this.root.classList.remove("show", "out");
+          this.stopTicking();
+          res();
+        }, 470);
+      };
+      step();
+    });
+  }
+};
+
+function loaderFatal(msg) {
+  LOAD.root.classList.add("show", "failed");
+  LOAD.root.classList.remove("out");
+  LOAD.stage.textContent = "fatal";
+  LOAD.pct.textContent = "--";
+  LOAD.tip.innerHTML = "";
+  const f = document.getElementById("ldFatal"), r = document.getElementById("ldRetry");
+  f.textContent = msg;
+  f.style.display = "block";
+  r.style.display = "block";
+  if (!r._wired) { r._wired = 1; r.addEventListener("click", () => location.reload()); }
+}
+
+function nextPaint() {
+  return new Promise(res => requestAnimationFrame(() => setTimeout(res, 0)));
+}
+
+/* ---- staged build: shared by the first boot and every re-deploy ---- */
+let arenaGroup = null, arenaRng = null, vehicleBuilt = false;
+
+function teardownRun() {
+  // clear the previous run's dynamic bodies BEFORE disposing shared arena geometry
+  for (let i = 0; i < debris.length; i++) scene.remove(debris[i].obj);
+  debris.length = 0;
+  while (probeGroup.children.length) probeGroup.remove(probeGroup.children[0]);
+  probes.length = 0;
+  props.length = 0;
+  disposeArena();
+  arenaGroup = null;
+}
+
+const BOOT_STAGES = [
+  { pct: 8, label: "booting renderer", run: () => {
+      createRenderer();
+      resize();
+    } },
+  { pct: 20, label: "sampling the heightfield", run: () => {
+      applySetup(selMap, selTier);
+    } },
+  { pct: 34, label: "generating terrain mesh", run: () => {
+      arenaGroup = new THREE.Group();
+      arena = arenaGroup;
+      scene.add(arenaGroup);
+      arenaRng = makeRng(MAP.seed);
+      buildTerrain(arenaGroup);
+    } },
+  { pct: 46, label: "flooding channels + paving roads", run: () => {
+      buildWater(arenaGroup);
+      buildRoads(arenaGroup);
+    } },
+  { pct: 55, label: "pouring the exfil bunker", run: () => {
+      buildBunker(arenaGroup);
+    } },
+  { pct: 67, label: "seeding scenery", run: () => {
+      buildProps(arenaGroup, arenaRng);
+    } },
+  { pct: 74, label: "assembling the storm rover", run: () => {
+      if (!vehicleBuilt) { buildVehicle(); vehicleBuilt = true; }
+      resetVehicle();
+    } },
+  { pct: 83, label: "spooling the vortex", run: () => {
+      buildTornado();
+    } },
+  { pct: 90, label: "precipitation + shadow atlas", run: () => {
+      if (!rain) buildRain();
+      applyEnvironment(MAP);          // rain exists now, so weather fully applies
+    } },
+  { pct: 96, label: "compiling shaders", run: () => {
+      renderer.compile(scene, camera);
+      renderer.render(scene, camera);
+    } }
+];
+
+async function runBoot(rebuild) {
+  if (rebuild) {
+    teardownRun();
+    await nextPaint();
+  }
+  for (let i = 0; i < BOOT_STAGES.length; i++) {
+    const s = BOOT_STAGES[i];
+    LOAD.set(i === 0 ? 4 : BOOT_STAGES[i - 1].pct, s.label);   // name the work, then do it
+    await nextPaint();
+    s.run();
+    LOAD.set(s.pct, s.label);
+  }
+}
+
+/* ---- screens ---- */
+function hideScreen() {
+  screenName = "playing";
+  el.screen.classList.remove("show");
+  el.hud.classList.remove("dim");
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+
+function setActions(primary, alt) {
+  el.btn.style.display = primary ? "inline-block" : "none";
+  el.btn.textContent = primary || "";
+  el.btnAlt.style.display = alt ? "inline-block" : "none";
+  el.btnAlt.textContent = alt || "";
+}
+
+function showScreen(name) {
+  screenName = name;
+  if (name !== "end") state = name.toUpperCase();
+
+  el.card.classList.toggle("narrow", name === "menu");
+  el.card.classList.toggle("wide", name === "help" || name === "settings");
+  el.brandMark.style.display = name === "menu" ? "none" : "block";
+  el.setup.style.display = name === "brief" ? "block" : "none";
+  el.stats.style.display = name === "end" ? "grid" : "none";
+  el.menuList.style.display = name === "menu" ? "block" : "none";
+  el.opts.style.display = name === "settings" ? "block" : "none";
+  el.bestLine.style.display = name === "menu" ? "block" : "none";
+  el.fatal.style.display = "none";
+  el.title.style.color = "var(--cyan)";
+
+  if (name === "menu") {
+    el.title.textContent = "TORNADO-HOLIC";
+    el.subtitle.textContent = "STORM EXTRACTION";
+    el.bigTitle.textContent = "// CHASE IT. UPLINK IT. OUTRUN IT.";
+    el.cardBody.innerHTML =
+      "Four test ranges, one violent tornado, and a rover that can only take so much. " +
+      "Get close enough to instrument the funnel and get out with the payload.";
+    renderMenuList();
+    renderBest();
+    setActions(null, null);
+  } else if (name === "brief") {
+    el.title.textContent = "FIELD PROTOCOL";
+    el.subtitle.textContent = MAPS[selMap].name + " // " + TIERS[selTier].name;
+    el.bigTitle.textContent = "Deploy probes · fill the pool · reach the bunker";
+    el.cardBody.innerHTML = BRIEF_BODY;
+    buildSetupUI();
+    setActions("START MISSION", "BACK");
+  } else if (name === "help") {
+    el.title.textContent = "HOW TO PLAY";
+    el.subtitle.textContent = "TORNADO-HOLIC // FIELD MANUAL";
+    el.bigTitle.textContent = "Instrument a tornado for a living";
+    el.cardBody.innerHTML = HELP_BODY;
+    setActions("BACK", null);
+  } else if (name === "settings") {
+    el.title.textContent = "SETTINGS";
+    el.subtitle.textContent = "TORNADO-HOLIC // INSTRUMENT CONFIG";
+    el.bigTitle.textContent = "Audio mix and render budget";
+    el.cardBody.innerHTML =
+      "The storm is loud by design: wind level and pitch ride your distance to the funnel. " +
+      "<span class='k'>AUTO</span> drops render quality on its own if the frame rate cannot hold 45fps.";
+    renderOpts();
+    setActions("BACK", null);
+  } else if (name === "end") {
+    setActions("REDEPLOY", "MAIN MENU");
+  }
+
+  el.hud.classList.add("dim");
+  el.screen.classList.add("show");
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+}
+
+function renderMenuList() {
+  el.menuList.innerHTML = "";
+  const items = [
+    { label: "PLAY MISSION", note: "select range", act: () => showScreen("brief") },
+    { label: "HOW TO PLAY", note: "controls", act: () => showScreen("help") },
+    { label: "SETTINGS", note: "audio · quality", act: () => showScreen("settings") }
+  ];
+  items.forEach(m => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "mrow";
+    b.innerHTML = '<span class="caret">&gt;</span><span>' + m.label + "</span>" +
+      (m.note ? '<span class="mnote">' + m.note + "</span>" : "");
+    b.addEventListener("click", () => { SFX.unlock(); SFX.one("ui"); m.act(); });
+    el.menuList.appendChild(b);
+  });
+}
+
+/* ---- settings ---- */
+function optRow(label) {
+  const r = document.createElement("div");
+  r.className = "optRow";
+  const l = document.createElement("span");
+  l.className = "olabel"; l.textContent = label;
+  const host = document.createElement("span");
+  host.className = "ochips";
+  const val = document.createElement("span");
+  val.className = "oval";
+  r.appendChild(l); r.appendChild(host); r.appendChild(val);
+  el.opts.appendChild(r);
+  return { host: host, val: val };
+}
+
+function optChips(row, labels, sel, onPick) {
+  labels.forEach((t, i) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "ochip" + (i === sel ? " sel" : "");
+    b.textContent = t;
+    b.addEventListener("click", () => { SFX.unlock(); SFX.one("ui"); onPick(i); });
+    row.host.appendChild(b);
+  });
+}
+
+function optScale(row, value, onPick) {
+  row.val.textContent = value * 10 + "%";
+  const wrap = document.createElement("span");
+  wrap.className = "scaleBar";
+  for (let i = 1; i <= 10; i++) {
+    const s = document.createElement("i");
+    s.className = "seg" + (i <= value ? " on" : "");
+    s.addEventListener("click", () => { SFX.unlock(); SFX.one("ui"); onPick(i); });
+    wrap.appendChild(s);
+  }
+  row.host.appendChild(wrap);
+}
+
+function renderOpts() {
+  el.opts.innerHTML = "";
+  const modes = ["auto", "low", "med", "high"];
+  optChips(optRow("QUALITY"), ["AUTO", "LOW", "MED", "HIGH"], modes.indexOf(qualityMode), i => {
+    if (modes[i] === "auto") autoKey = qualityKey();
+    applyQuality(modes[i], true);
+    renderOpts();
+  });
+
+  const scale = (label, key) => {
+    const row = optRow(label);
+    optScale(row, SAVE[key], v => { SAVE[key] = v; SAVE.write(); SFX.unlock(); SFX.applyVolumes(); renderOpts(); });
+  };
+  scale("MASTER", "master");
+  scale("AMBIENCE", "amb");
+  scale("ENGINE", "eng");
+  scale("SFX", "sfx");
+
+  const audio = optRow("AUDIO");
+  optChips(audio, ["ON", "MUTED"], SAVE.muted ? 1 : 0, i => {
+    SAVE.muted = i ? 1 : 0;
+    SAVE.write();
+    SFX.applyVolumes();
+    renderOpts();
+  });
+
+  const best = optRow("BEST RUN");
+  optChips(best, ["RESET"], -1, () => { SAVE.best = null; SAVE.write(); renderOpts(); });
+  best.val.textContent = SAVE.best ? SAVE.best.letter + " " + SAVE.best.score : "—";
+}
+
+/* ---- best run ---- */
+function saveBest(grade) {
+  if (!grade) return;
+  const b = SAVE.best;
+  if (b && b.score >= grade.score) return;
+  SAVE.best = {
+    score: grade.score, letter: grade.letter, color: grade.color,
+    map: MAP.name, tier: TIER.name, secs: Math.round(elapsed)
+  };
+  SAVE.write();
+}
+
+function renderBest() {
+  const b = SAVE.best;
+  el.bestLine.innerHTML = b
+    ? "BEST &nbsp;<b>" + b.letter + " · " + b.score + "</b> &nbsp;·&nbsp; <i>" +
+      b.map + " / " + b.tier + "</i> &nbsp;·&nbsp; " + b.secs + "s"
+    : "BEST &nbsp;<b>—</b> &nbsp;·&nbsp; no extraction logged yet";
+}
+
+/* ---- screen actions ---- */
+function primaryAction() {
+  SFX.unlock();
+  if (screenName === "menu") { SFX.one("ui"); showScreen("brief"); }
+  else if (screenName === "brief") { SFX.one("ui"); startGame(); }
+  else if (screenName === "help" || screenName === "settings") { SFX.one("back"); showScreen("menu"); }
+  else if (screenName === "end") { SFX.one("ui"); startGame(); }
+}
+
+function secondaryAction() {
+  SFX.unlock();
+  SFX.one("back");
+  if (screenName === "menu") showScreen("help");
+  else showScreen("menu");
+}
+
+async function startGame() {
+  if (booting) return;                    // never let two arena builds race
+  booting = true;
+  // Leave PLAYING before the first await. The loop keeps running while the
+  // arena is being rebuilt, and if the old run were still "playing" the win /
+  // lose checks in frame() could fire against a half-disposed scene — the
+  // previous run would then be clobbered by beginMission() a beat later.
+  state = "LOADING";
+  SFX.unlock();
+  SFX.lastAnchored = false;
+  hideScreen();
+  LOAD.reset("re-deploying");
+  try {
+    await runBoot(true);
+    await LOAD.finish();
+  } catch (e) {
+    booting = false;
+    loaderFatal("The range failed to build: " + (e && e.message ? e.message : String(e)));
+    return;
+  }
+  beginMission();
+  booting = false;
+}
+
+function beginMission() {
+  dataLevel = 0;
+  elapsed = 0;
+  peakProximity = Infinity;
+  probesLeft = CFG.PROBES_START;
+  storm.intensity = 0;
+  storm.ef = 1;
+  extract.active = false;
+  extract.deadline = 0;
+  extract.burning = false;
+  bunker.active = false;
+  radarBlackout = 0;
+  strikeCooldown = 0;
+  strike.pending = false;
+  if (strike.marker) strike.marker.visible = false;
+  grindSfxT = 0;
+  roverFlashT = 0;
+  dmgDirT = 0;
+  camLook.set(vehicle.pos.x, vehicle.pos.y + 3, vehicle.pos.z);
+  status("MISSION START — DEPLOY PROBES NEAR THE FUNNEL", 3);
+  state = "PLAYING";
+}
+
+el.btn.addEventListener("click", primaryAction);
+el.btnAlt.addEventListener("click", secondaryAction);
+
+
+
+/* ---- map + risk selectors (live on the briefing and end screens) ---- */
+let selMap = 0, selTier = 1;
+
+function buildSetupUI() {
+  const mapBox = document.getElementById("mapChips");
+  const tierBox = document.getElementById("tierChips");
+  mapBox.innerHTML = "";
+  tierBox.innerHTML = "";
+
+  MAPS.forEach((m, i) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (i === selMap ? " sel" : "");
+    b.textContent = m.name;
+    b.addEventListener("click", () => { SFX.unlock(); SFX.one("ui"); selMap = i; buildSetupUI(); });
+    mapBox.appendChild(b);
+  });
+
+  TIERS.forEach((t, i) => {
+    const b = document.createElement("button");
+    b.className = "chip" + (i === selTier ? " sel" : "");
+    b.textContent = t.name;
+    b.addEventListener("click", () => { SFX.unlock(); SFX.one("ui"); selTier = i; buildSetupUI(); });
+    tierBox.appendChild(b);
+  });
+
+  const m = MAPS[selMap], t = TIERS[selTier];
+  document.getElementById("mmMode").textContent = m.name + " · " + t.name;
+  document.getElementById("setupDesc").innerHTML =
+    "<b>" + m.blurb + "</b><br />" + t.blurb;
+}
+buildSetupUI();
+
+/* ---- HUD update ---- */
+function updateHUD(dt) {
+  // data
+  const dp = (dataLevel / CFG.DATA_TARGET) * 100;
+  el.dataFill.style.width = dp.toFixed(1) + "%";
+  el.dataVal.textContent = Math.floor(dp) + "%";
+
+  // storm
+  el.efVal.textContent = "EF" + storm.ef;
+  const pips = el.efPips.children;
+  for (let i = 0; i < 4; i++) {
+    const on = i < storm.ef;
+    pips[i].className = "pip" + (on ? (storm.ef === 4 ? " max" : " on") : "");
+  }
+  // Once the payload is full the top bar switches from escalation to the
+  // extraction clock — the number that actually matters from here on.
+  if (extract.active) {
+    const left = Math.max(0, extract.deadline - elapsed);
+    el.extractLabel.textContent = "Extract In";
+    el.timerVal.textContent = String(Math.floor(left / 60)) + ":" + String(Math.floor(left % 60)).padStart(2, "0");
+    el.timerVal.style.color = extract.burning ? "var(--red)" : (left < 15 ? "var(--amber)" : "var(--cyan)");
+  } else {
+    const remain = Math.max(0, CFG.ESCALATE_TIME - elapsed);
+    el.extractLabel.textContent = "Escalation";
+    el.timerVal.textContent = remain > 0
+      ? String(Math.floor(remain / 60)) + ":" + String(Math.floor(remain % 60)).padStart(2, "0")
+      : "PEAK";
+    el.timerVal.style.color = "";
+  }
+
+  // hull
+  const hp = clamp(vehicle.health, 0, 100);
+  el.hullFill.style.width = hp + "%";
+  el.hullVal.textContent = Math.ceil(hp);
+  el.hullBar.className = "bar" + (hp < 30 ? " crit" : hp < 60 ? " warn" : "");
+
+  // anchor: state tag plus the hydraulic reserve that powers it
+  const locked = vehicle.anchored;
+  const stunned = vehicle.stunned > 0;
+  el.anchorTag.textContent = stunned ? "SYSTEMS OFFLINE"
+    : vehicle.anchorLock > 0 ? "ANCHORS STOWED"
+    : locked ? (vehicle.airborne ? "ANCHORS AIRBORNE" : "ANCHOR LOCKED")
+    : (input.anchor && vehicle.anchorCharge <= 0.02) ? "ANCHOR DEPLETED"
+    : "CRUISING";
+  el.anchorTag.className = stunned ? "stunned" : locked ? "locked" : "";
+  el.anchorFill.style.width = (vehicle.anchorCharge * 100).toFixed(0) + "%";
+  el.anchorCharge.className = vehicle.anchorCharge < 0.25 ? "low" : "";
+  const kmh = Math.round(Math.hypot(vehicle.vel.x, vehicle.vel.z) * 3.6);
+  el.speedVal.textContent = kmh + " KM/H";
+
+  // probes
+  el.probeVal.textContent = probesLeft + " / " + CFG.PROBES_START;
+  const dots = el.probeDots.children;
+  let liveIdx = 0;
+  for (let i = 0; i < CFG.PROBES_START; i++) {
+    const held = i < probesLeft;
+    const live = !held && liveIdx < probes.length;
+    if (!held && live) liveIdx++;
+    dots[i].className = "pdot" + (held ? " has" : live ? " live" : "");
+  }
+
+  // status line
+  if (statusTimer > 0) {
+    statusTimer -= dt;
+    el.statusLine.textContent = statusText;
+  } else {
+    // contextual action hints
+    const dB = Math.hypot(vehicle.pos.x - bunker.center.x, vehicle.pos.z - bunker.center.z);
+    const dT = nearestVortexDist(vehicle.pos.x, vehicle.pos.z);
+    if (extract.burning) {
+      el.statusLine.textContent = ">> PAYLOAD BURNING — GET TO THE BUNKER";
+    } else if (extract.active) {
+      el.statusLine.textContent = ">> EXTRACT — " + Math.round(dB) + "M TO THE PAD";
+    } else if (probes.some(p => p.coreUpload)) {
+      el.statusLine.textContent = ">> CORE PROBE — 12%/S, BURNING FAST";
+    } else if (probes.length) {
+      const best = probes.reduce((m, p) => Math.max(m, p.rate), 0);
+      el.statusLine.textContent = best >= CFG.UPLOAD.nearRate ? ">> PROBE AT OPTIMAL RANGE"
+        : best >= CFG.UPLOAD.midRate ? ">> PROBE UPLINKING — CORE GAMBIT PAYS 12%/S"
+        : ">> PROBE SIGNAL WEAK — REDEPLOY CLOSER TO THE FUNNEL";
+    } else if (probesLeft > 0 && dT < 45) {
+      el.statusLine.textContent = ">> PRESS [E] TO DEPLOY PROBE";
+    } else {
+      el.statusLine.textContent = "";
+    }
+  }
+}
+
+/* ---- minimap ---- */
+const mm = document.getElementById("minimap");
+const mctx = mm.getContext("2d");
+const MM = mm.width;
+function drawMinimap() {
+  const scale = (MM - 8) / CFG.MAP;
+  const cx = MM / 2, cy = MM / 2;
+  const toX = x => cx + x * scale;
+  const toY = z => cy + z * scale;
+
+  mctx.clearRect(0, 0, MM, MM);
+  mctx.fillStyle = "rgba(8, 18, 24, 0.9)";
+  mctx.fillRect(0, 0, MM, MM);
+
+  // grid
+  mctx.strokeStyle = "rgba(79, 227, 255, 0.10)";
+  mctx.lineWidth = 1;
+  for (let i = -3; i <= 3; i++) {
+    const p = toX(i * 20);
+    mctx.beginPath(); mctx.moveTo(p, 4); mctx.lineTo(p, MM - 4); mctx.stroke();
+    const q = toY(i * 20);
+    mctx.beginPath(); mctx.moveTo(4, q); mctx.lineTo(MM - 4, q); mctx.stroke();
+  }
+
+  // roads follow the current layout
+  const r = MAP.roads;
+  mctx.fillStyle = "rgba(120, 132, 142, 0.35)";
+  mctx.strokeStyle = "rgba(120, 132, 142, 0.35)";
+  if (r.cross) {
+    mctx.fillRect(toX(-CFG.HALF), toY(-r.half), CFG.MAP * scale, r.half * 2 * scale);
+    mctx.fillRect(toX(-r.half), toY(-CFG.HALF), r.half * 2 * scale, CFG.MAP * scale);
+  }
+  if (r.diagonal) {
+    mctx.lineWidth = r.half * 2 * scale;
+    mctx.beginPath();
+    mctx.moveTo(toX(-CFG.HALF), toY(-CFG.HALF));
+    mctx.lineTo(toX(CFG.HALF), toY(CFG.HALF));
+    mctx.stroke();
+  }
+  if (r.ring) {
+    mctx.lineWidth = r.half * 2 * scale;
+    mctx.beginPath();
+    mctx.arc(cx, cy, r.ringR * scale, 0, TAU);
+    mctx.stroke();
+    if (r.spurs) {
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + Math.PI / 4;
+        mctx.beginPath();
+        mctx.moveTo(cx, cy);
+        mctx.lineTo(cx + Math.sin(a) * r.ringR * scale, cy + Math.cos(a) * r.ringR * scale);
+        mctx.stroke();
+      }
+    }
+  }
+  mctx.lineWidth = 1;
+
+  // border
+  mctx.strokeRect(toX(-CFG.HALF), toY(-CFG.HALF), CFG.MAP * scale, CFG.MAP * scale);
+
+  // flooded channels (Causeway) sit under the road layer
+  if (MAP.terrain.channels) {
+    const c = MAP.terrain.channels;
+    mctx.fillStyle = "rgba(41, 108, 138, 0.55)";
+    const band = (c.width + c.fade) * 2 * scale;
+    for (let s = -1; s <= 1; s += 2) {
+      mctx.fillRect(toX(c.offset * s) - band / 2, toY(-CFG.HALF), band, CFG.MAP * scale);
+      mctx.fillRect(toX(-CFG.HALF), toY(c.offset * s) - band / 2, CFG.MAP * scale, band);
+    }
+  }
+  // extraction point
+  const bx = toX(bunker.center.x), by = toY(bunker.center.z);
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.004);
+  mctx.strokeStyle = bunker.active
+    ? "rgba(63, 255, 158, " + (0.55 + pulse * 0.45) + ")"
+    : "rgba(63, 255, 158, 0.4)";
+  mctx.lineWidth = 1.5;
+  mctx.beginPath();
+  mctx.arc(bx, by, CFG.BUNKER.padR * scale, 0, TAU);
+  mctx.stroke();
+  mctx.fillStyle = bunker.active ? "rgba(63, 255, 158, 0.28)" : "rgba(63, 255, 158, 0.10)";
+  mctx.fill();
+  mctx.fillStyle = "rgba(63, 255, 158, 0.95)";
+  mctx.font = "9px 'Courier New', monospace";
+  mctx.textAlign = "center";
+  mctx.fillText("EXFIL", bx, by + 3);
+
+  // funnels: suction radius + spiral, one pass each. Radar range is capped by
+  // the risk tier, and heavy weather can blank the return for a few frames.
+  const pr = vortexParams();
+  for (let vi = 0; vi < vortices.length; vi++) {
+    const v = vortices[vi];
+    const tx = toX(v.pos.x), ty = toY(v.pos.z);
+    const blipDist = Math.hypot(v.pos.x - vehicle.pos.x, v.pos.z - vehicle.pos.z);
+    if (TIER.radar && blipDist > TIER.radar) continue;      // out of radar range
+    if (radarBlackout > 0) continue;                        // weather killed the return
+
+    mctx.fillStyle = "rgba(200, 214, 230, 0.10)";
+    mctx.beginPath(); mctx.arc(tx, ty, pr.pullR * scale, 0, TAU); mctx.fill();
+    mctx.strokeStyle = "rgba(200, 214, 230, 0.28)";
+    mctx.beginPath(); mctx.arc(tx, ty, pr.pullR * scale, 0, TAU); mctx.stroke();
+    mctx.strokeStyle = "rgba(255, 120, 120, 0.55)";
+    mctx.beginPath(); mctx.arc(tx, ty, pr.liftR * scale, 0, TAU); mctx.stroke();
+
+    mctx.lineWidth = 1.6;
+    mctx.strokeStyle = "rgba(235, 245, 255, 0.85)";
+    for (let a = 0; a < 3; a++) {
+      mctx.beginPath();
+      for (let s = 0; s <= 16; s++) {
+        const t = s / 16;
+        const ang = storm.time * 3 + a * (TAU / 3) + t * 5.0 + vi * 2.1;
+        const rad = (1 - t) * pr.liftR * 2.4 * v.scaleMul + 1;
+        const px = tx + Math.cos(ang) * rad * scale;
+        const py = ty + Math.sin(ang) * rad * scale;
+        if (s === 0) mctx.moveTo(px, py); else mctx.lineTo(px, py);
+      }
+      mctx.stroke();
+    }
+  }
+  mctx.lineWidth = 1;
+
+  // radar status corner readout
+  if (radarBlackout > 0) {
+    mctx.fillStyle = "rgba(255, 77, 77, 0.9)";
+    mctx.font = "8px 'Courier New', monospace";
+    mctx.textAlign = "left";
+    mctx.fillText("NO RETURN", 6, MM - 7);
+  } else if (TIER.radar) {
+    mctx.fillStyle = "rgba(255, 182, 72, 0.75)";
+    mctx.font = "8px 'Courier New', monospace";
+    mctx.textAlign = "left";
+    mctx.fillText("RANGE " + TIER.radar + "M", 6, MM - 7);
+  }
+
+  // probes
+  for (let i = 0; i < probes.length; i++) {
+    const p = probes[i];
+    const px = toX(p.pos.x), py = toY(p.pos.z);
+    const g = 0.6 + 0.4 * Math.sin(performance.now() * 0.008 + i);
+    mctx.fillStyle = "rgba(143, 252, 255, " + (0.4 + g * 0.5) + ")";
+    mctx.beginPath(); mctx.arc(px, py, 3.2, 0, TAU); mctx.fill();
+    mctx.strokeStyle = "rgba(143, 252, 255, 0.8)";
+    mctx.beginPath(); mctx.arc(px, py, 5 + g * 3, 0, TAU); mctx.stroke();
+  }
+
+  // debris
+  mctx.fillStyle = "rgba(255, 182, 72, 0.55)";
+  for (let i = 0; i < debris.length; i++) {
+    const b = debris[i];
+    mctx.fillRect(toX(b.pos.x) - 1, toY(b.pos.z) - 1, 2, 2);
+  }
+
+  // player
+  const px = toX(vehicle.pos.x), py = toY(vehicle.pos.z);
+  mctx.save();
+  mctx.translate(px, py);
+  mctx.rotate(-vehicle.heading + Math.PI);
+  mctx.fillStyle = vehicle.anchored ? "#ff4d4d" : "#ffb648";
+  mctx.beginPath();
+  mctx.moveTo(0, -6); mctx.lineTo(4.2, 5); mctx.lineTo(0, 2.6); mctx.lineTo(-4.2, 5);
+  mctx.closePath();
+  mctx.fill();
+  mctx.restore();
+
+  // frame ticks
+  mctx.strokeStyle = "rgba(79, 227, 255, 0.55)";
+  mctx.lineWidth = 1;
+  mctx.strokeRect(0.5, 0.5, MM - 1, MM - 1);
+}
+
+/* =========================================================================
+   12.5  AUDIO — procedural WebAudio, no asset files
+   ---------------------------------------------------------------------------
+   Everything here is generated: two looping noise buffers and a handful of
+   oscillators. That keeps the game a single file with zero requests, and lets
+   the storm be mixed live — wind level and cutoff ride the distance to the
+   nearest funnel, so the audio tells you how close you are before the HUD
+   does. Nothing in here may be able to break the game: every entry point is
+   guarded, and a failed AudioContext simply leaves the game silent.
+   ========================================================================= */
+const SFX = {
+  ctx: null, master: null, noise: null, ready: false,
+  windG: null, windF: null, howlO: null, howlG: null,
+  rainG: null, engG: null, engF: null, engO: null,
+  bedG: null, bedO: null,
+  prox: 0, proxT: 0, lastAnchored: false,
+
+  /* Browsers refuse to start audio before a gesture, so this is called from the
+     first pointerdown/keydown and is safe to call repeatedly. */
+  unlock() {
+    if (this.ctx) {
+      if (this.ctx.state === "suspended") { try { this.ctx.resume(); } catch (e) {} }
+      return;
+    }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try { this.ctx = new AC(); } catch (e) { this.ctx = null; return; }
+    try { this.build(); } catch (e) { this.ready = false; }
+  },
+
+  amb() { return SAVE.muted ? 0 : SAVE.amb / 10; },
+  eng() { return SAVE.muted ? 0 : SAVE.eng / 10; },
+  fx()  { return SAVE.muted ? 0 : SAVE.sfx / 10; },
+
+  applyVolumes() {
+    if (!this.ctx) return;
+    this.master.gain.setTargetAtTime(SAVE.muted ? 0 : SAVE.master / 10, this.ctx.currentTime, 0.03);
+  },
+
+  /* brown-ish noise: cheap to generate, and heavy in the low end where storm
+     wind actually lives. Seeded so every session sounds identical. */
+  makeNoise(seconds) {
+    const c = this.ctx;
+    const n = Math.floor(c.sampleRate * seconds);
+    const buf = c.createBuffer(1, n, c.sampleRate);
+    const d = buf.getChannelData(0);
+    const rng = makeRng(9971);
+    let last = 0;
+    for (let i = 0; i < n; i++) {
+      const w = rng() * 2 - 1;
+      last = (last + 0.021 * w) / 1.021;
+      d[i] = clamp(last * 3.4, -1, 1);
+    }
+    return buf;
+  },
+
+  build() {
+    const c = this.ctx;
+
+    // master -> compressor -> out. The compressor is what keeps wind + thunder
+    // + a debris pile-up from clipping when a funnel is sitting on the rover.
+    const master = this.master = c.createGain();
+    master.gain.value = SAVE.muted ? 0 : SAVE.master / 10;
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -16; comp.knee.value = 24; comp.ratio.value = 5;
+    comp.attack.value = 0.004; comp.release.value = 0.26;
+    master.connect(comp); comp.connect(c.destination);
+
+    this.noise = this.makeNoise(3);
+
+    // --- wind bed: level and cutoff both ride proximity to the funnel ---
+    const ws = c.createBufferSource(); ws.buffer = this.noise; ws.loop = true;
+    const wf = this.windF = c.createBiquadFilter();
+    wf.type = "lowpass"; wf.frequency.value = 240; wf.Q.value = 0.9;
+    const wg = this.windG = c.createGain(); wg.gain.value = 0;
+    ws.connect(wf); wf.connect(wg); wg.connect(master); ws.start(0);
+
+    // --- howl: a resonant band that climbs as the storm escalates ---
+    const ho = this.howlO = c.createOscillator(); ho.type = "sawtooth"; ho.frequency.value = 92;
+    const hf = c.createBiquadFilter(); hf.type = "bandpass"; hf.frequency.value = 470; hf.Q.value = 11;
+    const hg = this.howlG = c.createGain(); hg.gain.value = 0;
+    ho.connect(hf); hf.connect(hg); hg.connect(master); ho.start(0);
+
+    // --- rain hiss, mixed from the map's own rain opacity ---
+    const rs = c.createBufferSource(); rs.buffer = this.noise; rs.loop = true;
+    const rf = c.createBiquadFilter(); rf.type = "highpass"; rf.frequency.value = 1600;
+    const rg = this.rainG = c.createGain(); rg.gain.value = 0;
+    rs.connect(rf); rf.connect(rg); rg.connect(master); rs.start(0);
+
+    // --- drivetrain: two detuned oscillators through a lowpass ---
+    const ef = this.engF = c.createBiquadFilter(); ef.type = "lowpass"; ef.frequency.value = 440; ef.Q.value = 4;
+    const eg = this.engG = c.createGain(); eg.gain.value = 0;
+    const e1 = c.createOscillator(); e1.type = "sawtooth"; e1.frequency.value = 44;
+    const e2 = c.createOscillator(); e2.type = "square"; e2.frequency.value = 22; e2.detune.value = 9;
+    e1.connect(ef); e2.connect(ef); ef.connect(eg); eg.connect(master);
+    e1.start(0); e2.start(0);
+    this.engO = [e1, e2];
+
+    // --- storm drone: the whole run gets heavier underneath you ---
+    const bg = this.bedG = c.createGain(); bg.gain.value = 0;
+    const b1 = c.createOscillator(); b1.type = "sine"; b1.frequency.value = 55;
+    const b2 = c.createOscillator(); b2.type = "sine"; b2.frequency.value = 82.4;
+    b1.connect(bg); b2.connect(bg); bg.connect(master); b1.start(0); b2.start(0);
+    this.bedO = [b1, b2];
+
+    this.ready = true;
+  },
+
+  /* One call per frame. Everything uses setTargetAtTime so the params glide
+     instead of stepping, and so we never queue a ramp per particle. */
+  update(dt, playing) {
+    const c = this.ctx;
+    if (!c || !this.ready) return;
+
+    const p = vortexParams();
+    const dT = nearestVortexDist(vehicle.pos.x, vehicle.pos.z);
+    this.proxT = playing ? clamp(1 - dT / Math.max(1, p.pullR), 0, 1) : 0.05;
+    this.prox += (this.proxT - this.prox) * (1 - Math.exp(-2.4 * dt));
+
+    const t = c.currentTime, tc = 0.09;
+    const inten = playing ? storm.intensity : 0;
+    const a = this.amb();
+
+    this.windG.gain.setTargetAtTime((0.045 + 0.80 * this.prox) * a, t, tc);
+    this.windF.frequency.setTargetAtTime(190 + 1500 * this.prox + 260 * inten, t, tc);
+    this.howlG.gain.setTargetAtTime((0.003 + 0.08 * this.prox * (0.2 + inten)) * a, t, tc);
+    this.howlO.frequency.setTargetAtTime(86 + 130 * inten + 55 * this.prox, t, tc);
+    this.rainG.gain.setTargetAtTime((0.018 + 0.07 * (MAP.rain ? MAP.rain.opacity : 0.3)) * a, t, tc);
+    this.bedG.gain.setTargetAtTime((0.010 + 0.055 * inten) * a, t, tc);
+
+    const sp = playing && !(vehicle.stunned > 0) ? Math.hypot(vehicle.vel.x, vehicle.vel.z) : 0;
+    const load = clamp(sp / CFG.VEHICLE.maxSpeed, 0, 1);
+    this.engG.gain.setTargetAtTime(sp > 0.15 ? (0.020 + 0.075 * load) * this.eng() : 0, t, tc);
+    const rpm = 42 + 105 * load;
+    this.engO[0].frequency.setTargetAtTime(rpm, t, 0.05);
+    this.engO[1].frequency.setTargetAtTime(rpm * 0.5, t, 0.05);
+    this.engF.frequency.setTargetAtTime(360 + 900 * load, t, 0.06);
+  },
+
+  /* ---- one-shot voices ---- */
+  blip(freq, dur, type, vol, to, delay) {
+    const c = this.ctx; if (!c || !this.ready) return;
+    const t = c.currentTime + (delay || 0);
+    const o = c.createOscillator();
+    o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, t);
+    if (to && to !== 1) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * to), t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0004, vol), t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + dur + 0.03);
+  },
+
+  noiseHit(dur, cutFrom, cutTo, vol, delay) {
+    const c = this.ctx; if (!c || !this.ready) return;
+    const t = c.currentTime + (delay || 0);
+    const s = c.createBufferSource();
+    s.buffer = this.noise; s.loop = true;
+    s.playbackRate.value = 0.8 + Math.random() * 0.5;
+    const f = c.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.setValueAtTime(cutFrom, t);
+    f.frequency.exponentialRampToValueAtTime(Math.max(40, cutTo), t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0004, vol), t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master);
+    s.start(t); s.stop(t + dur + 0.05);
+  },
+
+  one(kind) {
+    const v = this.fx();
+    if (!this.ctx || !this.ready || v <= 0) return;
+    switch (kind) {
+      case "ui":      this.blip(900, 0.05, "square", 0.10 * v, 1); break;
+      case "back":    this.blip(440, 0.07, "square", 0.09 * v, 0.7); break;
+      case "probe":   this.blip(520, 0.10, "triangle", 0.30 * v, 3.1);
+                      this.blip(1320, 0.16, "sine", 0.14 * v, 1.3, 0.05); break;
+      case "anchor":  this.noiseHit(0.13, 900, 120, 0.30 * v);
+                      this.blip(160, 0.09, "square", 0.16 * v, 0.5); break;
+      case "stow":    this.blip(210, 0.07, "square", 0.10 * v, 0.55); break;
+      case "rip":     this.noiseHit(0.38, 2600, 220, 0.40 * v);
+                      this.blip(120, 0.30, "sawtooth", 0.16 * v, 0.35); break;
+      case "impact":  this.noiseHit(0.20, 1700, 170, 0.45 * v);
+                      this.blip(88, 0.13, "square", 0.22 * v, 0.45); break;
+      case "hull":    this.noiseHit(0.30, 2400, 200, 0.55 * v);
+                      this.blip(70, 0.22, "sawtooth", 0.20 * v, 0.4); break;
+      case "strike":  this.noiseHit(0.50, 5200, 130, 0.55 * v); break;
+      case "warn":    this.blip(1180, 0.07, "square", 0.16 * v, 1);
+                      this.blip(880, 0.09, "square", 0.15 * v, 1, 0.10); break;
+      case "full":    this.blip(660, 0.10, "triangle", 0.22 * v, 2.0);
+                      this.blip(990, 0.16, "triangle", 0.18 * v, 1.5, 0.09); break;
+      case "win":     [523, 659, 784, 1046].forEach((f, i) => this.blip(f, 0.24, "triangle", 0.24 * v, 1, i * 0.12)); break;
+      case "lose":    [392, 311, 233, 175].forEach((f, i) => this.blip(f, 0.34, "sawtooth", 0.18 * v, 0.98, i * 0.17)); break;
+    }
+  },
+
+  /* Thunder is delayed by how far away the strike looked, so a flash on the
+     horizon does not slap the player instantly. */
+  thunder() {
+    const v = this.amb();
+    if (!this.ctx || !this.ready || v <= 0) return;
+    const far = 0.25 + Math.random() * 1.9;
+    const dur = 1.6 + Math.random() * 1.2;
+    this.noiseHit(dur, 620 + Math.random() * 500, 62, (0.55 + Math.random() * 0.4) * v, far);
+  },
+
+  suspend() { if (this.ctx && this.ctx.state === "running") { try { this.ctx.suspend(); } catch (e) {} } },
+  resume() { if (this.ctx && this.ctx.state === "suspended") { try { this.ctx.resume(); } catch (e) {} } }
+};
+
+/* =========================================================================
+   12.6  GAME FEEL — damage bearing, off-screen objectives, wind pressure
+   ---------------------------------------------------------------------------
+   The storm's danger is currently only readable as numbers in a corner. These
+   three layers put it back on the screen where the player is already looking,
+   and they run off values the frame loop has already computed.
+   ========================================================================= */
+const _ndc = new THREE.Vector3();
+const HIT_TINT = new THREE.Color(0x7d3a14);
+const NO_TINT = new THREE.Color(0x000000);
+const DEG = 180 / Math.PI;
+
+let dmgDirT = 0, roverFlashT = 0;
+let lastVig = "", lastBearing = "";
+
+/* Screen-space bearing of a world point relative to the rover, used for the
+   damage wedge. Orthographic, so this is stable at any zoom. */
+function screenPoint(wx, wy, wz, out) {
+  _ndc.set(wx, wy, wz).project(camera);
+  out.x = (_ndc.x + 1) * 0.5 * window.innerWidth;
+  out.y = (1 - _ndc.y) * 0.5 * window.innerHeight;
+  out.z = _ndc.z;
+  return out;
+}
+const _sp = { x: 0, y: 0, z: 0 };
+
+function hitDirection(srcX, srcZ, cause) {
+  if (srcX === undefined || srcZ === undefined) return;
+  screenPoint(srcX, vehicle.pos.y + 1.4, srcZ, _sp);
+  const cx = window.innerWidth * 0.5, cy = window.innerHeight * 0.5;
+  const ang = Math.atan2(_sp.y - cy, _sp.x - cx);
+  const r = Math.min(window.innerWidth, window.innerHeight) * 0.33;
+  el.dmgDir.style.transform = "rotate(" + (ang * DEG).toFixed(1) + "deg) translateX(" + r.toFixed(0) + "px)";
+  // The wedge rotates with the parent; the caption has to rotate back or the
+  // text ends up sideways at the left and upside-down at the bottom.
+  el.dmgDirLabel.style.transform = "rotate(" + (-ang * DEG).toFixed(1) + "deg)";
+  el.dmgDirLabel.textContent = String(cause || "IMPACT").slice(0, 22);
+  dmgDirT = 1.05;
+}
+
+function roverFlash(strength) {
+  roverFlashT = Math.max(roverFlashT, 0.10 + 0.09 * clamp(strength || 1, 0, 1));
+}
+
+/* Off-screen chevrons for the two things that matter. They only appear when the
+   target has left the frame (or the extraction clock just armed), so they never
+   compete with the 3D view. */
+function markerFor(node, arrow, wx, wz, dist, show) {
+  if (!show) { node.style.opacity = "0"; return; }
+  screenPoint(wx, 2, wz, _sp);
+  const w = window.innerWidth, h = window.innerHeight;
+  // The ring is deliberately asymmetric: the mission bar owns the top strip and
+  // the hull/probe panels own the bottom, so a centred circle would drop the
+  // chevron straight onto them.
+  const l = 56, r = 56, t = 128, b = 112;
+  const cx = (l + w - r) * 0.5, cy = (t + h - b) * 0.5;
+  const rx = (w - r - l) * 0.5, ry = (h - b - t) * 0.5;
+  const behind = _sp.z > 1;
+  let ax = _sp.x - cx, ay = _sp.y - cy;
+  if (behind) { ax = -ax; ay = -ay; }
+  const nx = rx > 0 ? ax / rx : 2, ny = ry > 0 ? ay / ry : 2;
+  if (!behind && nx * nx + ny * ny < 0.72) { node.style.opacity = "0"; return; }
+
+  const ang = Math.atan2(ay, ax);
+  const px = cx + Math.cos(ang) * rx;
+  const py = cy + Math.sin(ang) * ry;
+  const sig = node.className + "|" + Math.round(px) + "," + Math.round(py);
+  if (sig !== node._last) {
+    node._last = sig;
+    node.style.transform = "translate(" + Math.round(px) + "px," + Math.round(py) + "px) translate(-50%,-50%)";
+    arrow.style.transform = "rotate(" + Math.round(ang * DEG + 90) + "deg)";
+    node.lastChild.textContent = Math.round(dist) + "M";
+  }
+  node.style.opacity = "1";
+}
+
+function updateFeel(dt, playing) {
+  // --- wind pressure vignette: same proximity value the audio is mixed from ---
+  const p = vortexParams();
+  const dStorm = nearestVortexDist(vehicle.pos.x, vehicle.pos.z);
+  const prox = playing ? clamp(1 - dStorm / Math.max(1, p.pullR), 0, 1) : 0;
+  const vig = playing ? (Math.pow(prox, 1.8) * 0.8).toFixed(2) : "0";
+  if (vig !== lastVig) { lastVig = vig; el.windVig.style.opacity = vig; }
+
+  // --- hull hit flash on the rover itself ---
+  if (roverFlashT > 0) roverFlashT -= dt;
+  if (MAT.roverBody && MAT.roverBody.emissive) {
+    const k = roverFlashT > 0 ? clamp(roverFlashT / 0.16, 0, 1) : 0;
+    MAT.roverBody.emissive.copy(NO_TINT).lerp(HIT_TINT, k);
+    if (MAT.roverDark && MAT.roverDark.emissive) MAT.roverDark.emissive.copy(NO_TINT).lerp(HIT_TINT, k * 0.75);
+  }
+
+  // --- damage bearing fade ---
+  if (dmgDirT > 0) {
+    dmgDirT -= dt;
+    const o = clamp(dmgDirT / 0.45, 0, 1).toFixed(2);
+    if (o !== lastBearing) { lastBearing = o; el.dmgDir.style.opacity = o; }
+  } else if (lastBearing !== "0") {
+    lastBearing = "0"; el.dmgDir.style.opacity = "0";
+  }
+
+  // --- objective chevrons ---
+  const armed = dataLevel >= CFG.DATA_TARGET;
+  const dB = Math.hypot(vehicle.pos.x - bunker.center.x, vehicle.pos.z - bunker.center.z);
+  markerFor(el.mkExfil, el.mkExfilArrow, bunker.center.x, bunker.center.z, dB,
+            playing && armed && dB > 12);
+  const v = nearestVortex(vehicle.pos.x, vehicle.pos.z);
+  markerFor(el.mkStorm, el.mkStormArrow, v ? v.pos.x : 0, v ? v.pos.z : 0, dStorm,
+            playing && !!v && dStorm < p.pullR * 1.6);
+}
+
+/* =========================================================================
+   13. MAIN LOOP
+   ========================================================================= */
+let last = performance.now();
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (glLost) return;
+  let dt = (now - last) / 1000;
+  last = now;
+  if (dt > 0.05) dt = 0.05;     // clamp long stalls (tab switches)
+  if (dt <= 0) return;
+
+  const playing = state === "PLAYING";
+
+  if (playing) {
+    elapsed += dt;
+    const prevEf = storm.ef;
+    storm.intensity = clamp(elapsed / CFG.ESCALATE_TIME, 0, 1);
+    storm.ef = clamp(1 + Math.floor(storm.intensity * 3.999), 1, 4);
+    if (storm.ef !== prevEf) {
+      status("STORM INTENSIFYING — " + "EF" + storm.ef + " NOW", 2.2);
+      SFX.one("warn");
+    }
+
+    updateVehicle(dt);
+    updateTornado(dt);
+    updateProps();
+    updateDebris(dt);
+    updateProbes(dt);
+
+    // track peak proximity to the nearest funnel
+    const dT = nearestVortexDist(vehicle.pos.x, vehicle.pos.z);
+    if (dT < peakProximity) peakProximity = dT;
+
+    // the debris field inside the funnel grinds the hull down (bypasses i-frames)
+    const p = vortexParams();
+    if (!vehicle.anchored && dT < p.liftR * 0.8) {
+      vehicle.health = Math.max(0, vehicle.health - TIER.drain * dt);
+      roverFlash(0.45);
+      if (grindSfxT <= 0) { SFX.one("hull"); grindSfxT = 0.55; }
+      if (vehicle.health <= 0) { endGame(false); return; }
+    }
+    if (grindSfxT > 0) grindSfxT -= dt;
+
+    // ---- extraction phase ----
+    // armed  -> clock running, pad live
+    // burning-> window lapsed, payload cooking off; only a live uplink can
+    //          pull it back to 100%, which re-arms a fresh window
+    if (extract.active) {
+      if (elapsed > extract.deadline) {
+        extract.burning = true;
+        extract.active = false;
+      }
+    }
+    if (extract.burning) {
+      dataLevel = Math.max(0, dataLevel - CFG.EXTRACT_BURN * dt);
+      if (dataLevel <= 0) { endGame(false, "PAYLOAD LOST"); return; }
+      if (dataLevel >= CFG.DATA_TARGET) {
+        extract.burning = false;
+        extract.active = true;
+        extract.deadline = elapsed + CFG.EXTRACT_WINDOW;
+        status("PAYLOAD RECOVERED — GO", 2);
+        SFX.one("full");
+      }
+    } else if (dataLevel >= CFG.DATA_TARGET && !extract.active) {
+      extract.active = true;
+      extract.deadline = elapsed + CFG.EXTRACT_WINDOW;
+      status("PAYLOAD FULL — REACH THE BUNKER", 3);
+      SFX.one("full");
+    }
+
+    // extraction check
+    const dB = Math.hypot(vehicle.pos.x - bunker.center.x, vehicle.pos.z - bunker.center.z);
+    bunker.active = dataLevel >= CFG.DATA_TARGET;
+    if (bunker.active && dB < CFG.BUNKER.padR) {
+      endGame(true);
+      return;
+    }
+  } else {
+    // idle: keep the storm alive behind the menu / end screens
+    updateTornado(dt * 0.6);
+    if (vehicle.dish) vehicle.dish.rotation.y += dt * 0.5;
+  }
+
+  // bunker pad visuals
+  if (bunker.pad) {
+    const t = performance.now() * 0.003;
+    bunker.pad.material.opacity = bunker.active ? 0.24 + Math.sin(t) * 0.16 : 0.12 + Math.sin(t) * 0.06;
+    bunker.ring.material.opacity = bunker.active ? 0.55 + Math.sin(t * 1.6) * 0.35 : 0.35;
+    bunker.beam.visible = bunker.active;
+    if (bunker.active) {
+      bunker.beam.material.opacity = 0.12 + Math.sin(t * 2.2) * 0.06;
+      bunker.beam.rotation.y += dt * 0.35;
+    }
+  }
+
+  // camera: true isometric offset, smooth follow, screen shake
+  camLook.x += (vehicle.pos.x - camLook.x) * (1 - Math.exp(-6 * dt));
+  camLook.z += (vehicle.pos.z - camLook.z) * (1 - Math.exp(-6 * dt));
+  camLook.y += (vehicle.pos.y + 3 - camLook.y) * (1 - Math.exp(-6 * dt));
+  camTarget.copy(camLook).add(CFG.CAM_OFFSET).add(shake);
+  camera.position.copy(camTarget);
+  camera.lookAt(camLook.x + shake.x, camLook.y + shake.y, camLook.z + shake.z);
+  shake.multiplyScalar(Math.exp(-6 * dt));
+
+  // sun follows the rover so shadows stay inside the map
+  sunTarget.position.set(vehicle.pos.x, 0, vehicle.pos.z);
+  sun.position.set(vehicle.pos.x + 46, 78, vehicle.pos.z + 26);
+  sunTarget.updateMatrixWorld();
+
+  updateRain(dt);
+  updateLightning(dt);
+  updateHUD(dt);
+  drawMinimap();
+  SFX.update(dt, playing);
+  updateFeel(dt, playing);
+  tickAutoQuality(dt);
+
+  renderer.render(scene, camera);
+
+}
+
+/* =========================================================================
+   14. BOOT
+   ========================================================================= */
+async function boot() {
+  LOAD.init();
+  applyQuality(SAVE.quality || "auto", true);
+  try {
+    await runBoot(false);
+    camLook.set(vehicle.pos.x, vehicle.pos.y + 3, vehicle.pos.z);
+    await LOAD.finish();
+  } catch (e) {
+    loaderFatal("The range failed to build: " + (e && e.message ? e.message : String(e)));
+    return;
+  }
+  state = "MENU";
+  showScreen("menu");
+  requestAnimationFrame(frame);
+}
+
+boot();
+</script>
+</body>
+</html>

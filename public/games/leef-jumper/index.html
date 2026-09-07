@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Leef Jumper - Sentuh Daun</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #gameContainer {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      height: 100%;
+      max-height: 640px;
+      background: linear-gradient(180deg, #182218 0%, #121212 100%);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+    .hud {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      right: 15px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      font-weight: 800;
+      font-size: 16px;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    }
+    .score-badge {
+      background: rgba(30, 215, 96, 0.2);
+      border: 1px solid #1ed760;
+      color: #1ed760;
+      padding: 4px 12px;
+      border-radius: 9999px;
+    }
+    .coffee-badge {
+      background: rgba(255, 164, 43, 0.2);
+      border: 1px solid #ffa42b;
+      color: #ffa42b;
+      padding: 4px 12px;
+      border-radius: 9999px;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(18, 18, 18, 0.9);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+    }
+    .overlay h1 {
+      font-size: 28px;
+      color: #1ed760;
+      margin-bottom: 8px;
+    }
+    .overlay p {
+      font-size: 13px;
+      color: #b3b3b3;
+      margin-bottom: 20px;
+      max-width: 280px;
+    }
+    .btn {
+      background: #1ed760;
+      color: #000;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 9999px;
+      font-weight: 800;
+      font-size: 14px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: transform 0.15s, background 0.15s;
+    }
+    .btn:hover {
+      background: #1db954;
+      transform: scale(1.05);
+    }
+  </style>
+</head>
+<body>
+  <div id="gameContainer">
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <div class="hud">
+      <div class="score-badge">SKOR: <span id="scoreVal">0</span></div>
+      <div class="coffee-badge">☕ KOPI: <span id="coffeeVal">0</span></div>
+    </div>
+    <div id="startOverlay" class="overlay">
+      <h1>🌿 LEEF JUMPER</h1>
+      <p>Lompat di daun-daun hijau, kumpulkan kopi, jangan sampai jatuh!</p>
+      <button id="startBtn" class="btn">Mulai Main</button>
+      <p style="margin-top: 15px; font-size: 11px; color: #7c7c7c;">Kontrol: Panah Kiri/Kanan atau Tombol A/D atau Sentuh Layar</p>
+    </div>
+    <div id="gameOverOverlay" class="overlay" style="display: none;">
+      <h1 style="color: #f3727f;">JATUH DARI DAUN!</h1>
+      <p id="finalScoreText">Skor Kamu: 0</p>
+      <button id="restartBtn" class="btn">Main Lagi</button>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreVal = document.getElementById('scoreVal');
+    const coffeeVal = document.getElementById('coffeeVal');
+    const startOverlay = document.getElementById('startOverlay');
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const startBtn = document.getElementById('startBtn');
+    const restartBtn = document.getElementById('restartBtn');
+    const finalScoreText = document.getElementById('finalScoreText');
+
+    let gameRunning = false;
+    let score = 0;
+    let coffeeCount = 0;
+    let cameraY = 0;
+
+    const player = {
+      x: 200,
+      y: 500,
+      width: 28,
+      height: 28,
+      vx: 0,
+      vy: 0,
+      jumpForce: -10.5,
+      gravity: 0.35,
+      speed: 4.5
+    };
+
+    let platforms = [];
+    let coffees = [];
+    const keys = {};
+
+    function initGame() {
+      score = 0;
+      coffeeCount = 0;
+      cameraY = 0;
+      player.x = 200;
+      player.y = 500;
+      player.vx = 0;
+      player.vy = player.jumpForce;
+
+      platforms = [];
+      coffees = [];
+
+      // Base platform
+      platforms.push({ x: 150, y: 550, width: 100, height: 14 });
+
+      // Generate initial platforms
+      for (let y = 500; y > -1000; y -= 65) {
+        const x = Math.random() * (canvas.width - 80);
+        platforms.push({ x, y, width: 75 + Math.random() * 20, height: 14 });
+        if (Math.random() < 0.25) {
+          coffees.push({ x: x + 30, y: y - 20, collected: false });
+        }
+      }
+
+      scoreVal.innerText = '0';
+      coffeeVal.innerText = '0';
+      gameRunning = true;
+    }
+
+    window.addEventListener('keydown', (e) => {
+      keys[e.key] = true;
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'Space', ' '].includes(e.key)) {
+        e.preventDefault();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      keys[e.key] = false;
+    });
+
+    // Touch controls for mobile
+    let touchStartX = null;
+    canvas.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (touchStartX !== null) {
+        const currentX = e.touches[0].clientX;
+        if (currentX < touchStartX - 20) {
+          keys['ArrowLeft'] = true;
+          keys['ArrowRight'] = false;
+        } else if (currentX > touchStartX + 20) {
+          keys['ArrowRight'] = true;
+          keys['ArrowLeft'] = false;
+        }
+      }
+    }, { passive: true });
+
+    canvas.addEventListener('touchend', () => {
+      keys['ArrowLeft'] = false;
+      keys['ArrowRight'] = false;
+      touchStartX = null;
+    });
+
+    function update() {
+      if (!gameRunning) return;
+
+      // Handle horizontal input
+      if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+        player.vx = -player.speed;
+      } else if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+        player.vx = player.speed;
+      } else {
+        player.vx *= 0.8;
+      }
+
+      player.x += player.vx;
+
+      // Screen wrap
+      if (player.x < -player.width) player.x = canvas.width;
+      if (player.x > canvas.width) player.x = -player.width;
+
+      // Gravity & Jump
+      player.vy += player.gravity;
+      player.y += player.vy;
+
+      // Platform collisions (only when falling)
+      if (player.vy > 0) {
+        for (const p of platforms) {
+          if (
+            player.x + player.width > p.x &&
+            player.x < p.x + p.width &&
+            player.y + player.height >= p.y &&
+            player.y + player.height <= p.y + p.height + player.vy
+          ) {
+            player.vy = player.jumpForce;
+            player.y = p.y - player.height;
+            break;
+          }
+        }
+      }
+
+      // Collect coffees
+      for (const c of coffees) {
+        if (!c.collected) {
+          const dist = Math.hypot(player.x + player.width / 2 - c.x, player.y + player.height / 2 - c.y);
+          if (dist < 25) {
+            c.collected = true;
+            coffeeCount++;
+            score += 50;
+            coffeeVal.innerText = coffeeCount;
+          }
+        }
+      }
+
+      // Camera follow
+      if (player.y < cameraY + 300) {
+        const diff = (cameraY + 300) - player.y;
+        cameraY -= diff;
+        score += Math.floor(diff);
+        scoreVal.innerText = score;
+      }
+
+      // Generate higher platforms dynamically
+      const highestPlat = platforms[platforms.length - 1];
+      if (highestPlat && highestPlat.y > cameraY - 400) {
+        for (let y = highestPlat.y - 65; y > cameraY - 600; y -= 65) {
+          const x = Math.random() * (canvas.width - 80);
+          platforms.push({ x, y, width: 75 + Math.random() * 20, height: 14 });
+          if (Math.random() < 0.25) {
+            coffees.push({ x: x + 30, y: y - 20, collected: false });
+          }
+        }
+      }
+
+      // Cleanup offscreen platforms below
+      platforms = platforms.filter(p => p.y < cameraY + 700);
+      coffees = coffees.filter(c => c.y < cameraY + 700);
+
+      // Check Game Over
+      if (player.y > cameraY + 650) {
+        gameRunning = false;
+        finalScoreText.innerText = `Skor Akhir: ${score} | Kopi: ${coffeeCount}`;
+        gameOverOverlay.style.display = 'flex';
+
+        // Send score to Game Leef parent window via Bridge SDK
+        try {
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+              type: 'GAMELEEF_SUBMIT_SCORE',
+              gameId: 'leef-jumper',
+              score: score,
+              data: { coffeeCount }
+            }, '*');
+          }
+        } catch (e) {
+          // Ignore
+        }
+      }
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.translate(0, -cameraY);
+
+      // Draw background ambient particles
+      ctx.fillStyle = 'rgba(30, 215, 96, 0.08)';
+      for (let i = 0; i < 20; i++) {
+        const py = (cameraY + i * 35) % 800 + cameraY - 100;
+        const px = (i * 73) % canvas.width;
+        ctx.beginPath();
+        ctx.arc(px, py, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Draw Platforms (Leaves)
+      for (const p of platforms) {
+        ctx.fillStyle = '#1ed760';
+        ctx.beginPath();
+        ctx.roundRect(p.x, p.y, p.width, p.height, 7);
+        ctx.fill();
+
+        // Leaf vein detail
+        ctx.strokeStyle = '#121212';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(p.x + 10, p.y + p.height / 2);
+        ctx.lineTo(p.x + p.width - 10, p.y + p.height / 2);
+        ctx.stroke();
+      }
+
+      // Draw Coffees
+      for (const c of coffees) {
+        if (!c.collected) {
+          ctx.font = '18px sans-serif';
+          ctx.fillText('☕', c.x - 9, c.y + 6);
+        }
+      }
+
+      // Draw Player (Leaf Mascot)
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(player.x + player.width / 2, player.y + player.height / 2, player.width / 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Face
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(player.x + 9, player.y + 11, 2.5, 0, Math.PI * 2);
+      ctx.arc(player.x + 19, player.y + 11, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Green Leaf Headpiece
+      ctx.fillStyle = '#1ed760';
+      ctx.beginPath();
+      ctx.ellipse(player.x + 14, player.y - 2, 6, 10, Math.PI / 4, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    function gameLoop() {
+      update();
+      render();
+      requestAnimationFrame(gameLoop);
+    }
+
+    startBtn.addEventListener('click', () => {
+      startOverlay.style.display = 'none';
+      initGame();
+    });
+
+    restartBtn.addEventListener('click', () => {
+      gameOverOverlay.style.display = 'none';
+      initGame();
+    });
+
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>

@@ -1,0 +1,2696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FishVille — 3D Aquarium</title>
+<style>
+  :root { --panel: rgba(10, 20, 30, 0.82); --line: rgba(140, 200, 255, 0.18); --accent: #4fd1ff; --gold: #ffd34f; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0b1118; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; touch-action: manipulation; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 42%, transparent 60%, rgba(0,0,0,0.38) 100%); z-index: 1; }
+
+  /* z-index scale: 1 vignette · 2 HUD panels · 3 toasts/tip · 10 modals · 100 loader */
+  .panel { position: fixed; z-index: 2; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; color: #dceeff; box-shadow: 0 6px 24px rgba(0,0,0,0.35); }
+  .panel.blurred { backdrop-filter: blur(8px); }
+
+  #titlebar { top: 16px; left: 16px; padding: 12px 18px; display: flex; align-items: center; gap: 14px; }
+  #titlebar h1 { font-size: 20px; letter-spacing: 3px; font-weight: 800; color: #fff; text-shadow: 0 0 12px rgba(79,209,255,0.6); }
+  #titlebar h1 span { color: var(--accent); }
+  #coinPill { display: inline-flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 700; color: var(--gold); background: rgba(255, 211, 79, 0.12); border: 1px solid rgba(255, 211, 79, 0.4); padding: 5px 14px; border-radius: 999px; transition: transform .15s, box-shadow .3s; }
+  #coinPill svg { width: 16px; height: 16px; }
+  #coinPill.bump { transform: scale(1.15); box-shadow: 0 0 14px rgba(255, 211, 79, 0.55); }
+  #timePill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #bfe4ff; background: rgba(79, 209, 255, 0.1); border: 1px solid rgba(79, 209, 255, 0.35); padding: 5px 12px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+  #timePill svg { width: 14px; height: 14px; }
+
+  #rightCol { position: fixed; top: 16px; right: 16px; z-index: 2; display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+  #actions { position: static; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+  #actions button { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 176px; min-height: 44px; padding: 9px 14px; font-size: 15px; font-weight: 600; color: #eaf6ff; background: rgba(79, 209, 255, 0.12); border: 1px solid rgba(79, 209, 255, 0.35); border-radius: 10px; cursor: pointer; transition: background .15s, transform .05s; }
+  #actions button svg { width: 16px; height: 16px; flex: none; }
+  #actions button:hover:not(:disabled) { background: rgba(79, 209, 255, 0.25); }
+  #actions button:active:not(:disabled) { transform: scale(0.97); }
+  #actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+  #actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #btnReset { margin-top: 4px; }
+  #actions button small { color: var(--gold); font-weight: 700; }
+  #actions button.warn { border-color: rgba(255, 120, 90, 0.5); background: rgba(255, 120, 90, 0.1); }
+
+  /* Inhabitants HUD — 3 levels: strip (minimize) / modal (expand) / hidden */
+  #strip { position: static; display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 9px 12px; }
+  #stripCounts { display: flex; align-items: center; gap: 12px; }
+  #feedQtyWrap { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: -2px; }
+  #feedQtyWrap button { min-width: 0; min-height: 0; width: 30px; height: 30px; padding: 0; gap: 0; justify-content: center; font-size: 16px; font-weight: 700; border-radius: 8px; }
+  #feedQtyWrap span { min-width: 58px; text-align: center; font-size: 12.5px; font-weight: 600; color: #bfe4ff; }
+  #strip.hidden { display: none; }
+  #strip .cnt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #bfe4ff; }
+  #strip .cnt svg { width: 15px; height: 15px; color: var(--accent); }
+  #strip .cnt.eggs svg { color: var(--gold); }
+  .iconBtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; color: #bfe4ff; background: rgba(79, 209, 255, 0.1); border: 1px solid rgba(79, 209, 255, 0.3); border-radius: 8px; cursor: pointer; transition: background .15s; }
+  .iconBtn svg { width: 15px; height: 15px; }
+  .iconBtn:hover { background: rgba(79, 209, 255, 0.25); }
+  #btnShowStrip { align-self: center; position: relative; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; color: #dceeff; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; cursor: pointer; }
+  #btnShowStrip svg { width: 20px; height: 20px; color: var(--accent); }
+  #btnShowStrip.hidden { display: none; }
+  #resWrap { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(4, 9, 15, 0.6); }
+  #resWrap.hidden { display: none; }
+  #resBox { width: min(620px, 94vw); max-height: 84vh; display: flex; flex-direction: column; text-align: left; padding: 18px 20px; }
+  #resBox h3 { display: flex; align-items: center; gap: 8px; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: #8fd4ff; margin-bottom: 2px; }
+  #resBox h3 svg { width: 16px; height: 16px; color: var(--accent); }
+  #resSub { font-size: 11px; color: #9fb8cc; margin-bottom: 12px; }
+  #resList { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 10px; scrollbar-width: thin; padding-right: 4px; }
+  .resRow { display: flex; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.05); }
+  .resImg { width: 118px; height: 88px; flex: none; object-fit: contain; border-radius: 8px; border: 1px solid var(--line); background: radial-gradient(ellipse at 50% 38%, #152a3e 0%, #0b1620 78%); }
+  .resInfo { flex: 1; min-width: 0; }
+  .resInfo .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .resInfo b { display: inline-flex; align-items: center; gap: 7px; color: #fff; font-size: 14px; }
+  .resInfo b svg { width: 16px; height: 16px; }
+  .resInfo .sp { color: #7dd3fc; font-size: 11px; }
+  .resInfo .stage { font-size: 11px; color: #9fb8cc; }
+  .variant { display: inline-flex; align-items: center; gap: 3px; color: var(--gold); font-size: 11px; font-weight: 600; }
+  .variant svg { width: 11px; height: 11px; }
+  .resRow .bar { margin-top: 5px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.12); overflow: hidden; }
+  .resRow .bar i { display: block; height: 100%; background: linear-gradient(90deg, #4fd1ff, #7dff9e); border-radius: 3px; transition: width .4s; }
+  .resRow .bar.hunger i { background: linear-gradient(90deg, #ff9e6e, #ff5f4f); }
+  .resRow .bar.age i { background: linear-gradient(90deg, #7dff9e, #ffd34f, #ff5f4f); }
+  .resRow .hatch { color: #ffd34f; font-size: 11px; }
+  #resEmpty { color: #7d97ad; font-size: 13px; padding: 4px 2px; }
+  #btnResClose, #btnShopClose, #btnAwayClose { margin-top: 12px; align-self: center; padding: 9px 28px; font-size: 13px; font-weight: 700; color: #eaf6ff; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+
+  /* Shop (Ronde 10) — feed + telur per spesies */
+  #shopWrap { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(4, 9, 15, 0.6); }
+  #shopWrap.hidden { display: none; }
+  #shopBox { width: min(470px, 94vw); max-height: 84vh; display: flex; flex-direction: column; text-align: left; padding: 18px 20px; }
+  #shopBox h3 { display: flex; align-items: center; gap: 8px; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: #8fd4ff; margin-bottom: 2px; }
+  #shopBox h3 svg { width: 16px; height: 16px; color: var(--gold); }
+  #shopSub { font-size: 11px; color: #9fb8cc; margin-bottom: 12px; }
+  #shopList { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; padding-right: 4px; }
+  .shopRow { display: flex; gap: 12px; align-items: center; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.05); }
+  .shopImg { width: 84px; height: 64px; flex: none; object-fit: contain; border-radius: 8px; border: 1px solid var(--line); background: radial-gradient(ellipse at 50% 38%, #152a3e 0%, #0b1620 78%); }
+  #shopFeedRow #feedQtyWrap { margin-top: 6px; justify-content: flex-start; }
+  #shopFeedRow #feedQtyWrap span { min-width: 0; }
+  .buyBtn { flex: none; min-height: 34px; padding: 6px 12px; font-size: 12px; font-weight: 700; color: #eaf6ff; background: rgba(255, 211, 79, 0.14); border: 1px solid rgba(255, 211, 79, 0.4); border-radius: 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+  .buyBtn:hover { background: rgba(255, 211, 79, 0.28); }
+  .buyBtn:disabled { opacity: .45; cursor: default; background: rgba(255,255,255,0.05); border-color: var(--line); }
+  .sellBtn { flex: none; min-height: 28px; padding: 4px 10px; font-size: 11.5px; font-weight: 700; color: #ffd34f; background: rgba(255, 211, 79, 0.10); border: 1px solid rgba(255, 211, 79, 0.4); border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+  .sellBtn:hover { background: rgba(255, 211, 79, 0.24); }
+  .sellBtn svg { width: 12px; height: 12px; }
+
+  /* Ronde 13 — away report ("While you were away") */
+  #awayWrap { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(4, 9, 15, 0.6); }
+  #awayWrap.hidden { display: none; }
+  #awayBox { width: min(430px, 94vw); max-height: 84vh; display: flex; flex-direction: column; text-align: left; padding: 18px 20px; }
+  #awayBox h3 { display: flex; align-items: center; gap: 8px; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: #8fd4ff; margin-bottom: 2px; }
+  #awayBox h3 svg { width: 16px; height: 16px; color: var(--accent); }
+  #awaySub { font-size: 11px; color: #9fb8cc; margin-bottom: 12px; }
+  #awayList { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; padding-right: 4px; }
+  .awayRow { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.05); font-size: 12px; color: #eaf6ff; line-height: 1.4; }
+  .awayRow svg { width: 15px; height: 15px; flex: none; margin-top: 1px; }
+  /* Ronde 15 — modal konfirmasi generik (Buy/Sell/Reset) */
+  #confirmWrap { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(4, 9, 15, 0.6); }
+  #confirmWrap.hidden { display: none; }
+  #confirmBox { width: min(430px, 94vw); display: flex; flex-direction: column; text-align: left; padding: 18px 20px; }
+  #confirmBox h3 { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: #8fd4ff; margin-bottom: 2px; }
+  #confirmText { font-size: 13px; color: #cfe8ff; margin-bottom: 14px; line-height: 1.5; }
+  #confirmActions { display: flex; justify-content: flex-end; gap: 10px; }
+  #confirmActions button { padding: 9px 22px; font-size: 13px; font-weight: 700; border-radius: 10px; cursor: pointer; }
+  #btnConfirmNo { color: #eaf6ff; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); }
+  #btnConfirmYes { color: #0b1118; background: linear-gradient(180deg, #ffd34f, #ffb52e); border: 1px solid rgba(255, 211, 79, 0.8); }
+
+  #hint { bottom: 16px; left: 16px; padding: 10px 16px; font-size: 13px; color: #cfe8ff; max-width: 46vw; }
+  #toasts { position: fixed; bottom: 74px; left: 50%; transform: translateX(-50%); z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+  .toast { padding: 9px 18px; border-radius: 999px; background: rgba(8, 18, 28, 0.85); border: 1px solid rgba(140, 200, 255, 0.3); color: #eaf6ff; font-size: 13px; font-weight: 600; animation: toastIn 2.6s ease forwards; }
+  @keyframes toastIn { 0% { opacity: 0; transform: translateY(14px); } 12% { opacity: 1; transform: translateY(0); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
+  .toast.status { display: inline-flex; align-items: center; gap: 9px; }
+  .toast.status svg { width: 18px; height: 18px; flex: none; }
+  #tip { position: fixed; z-index: 3; pointer-events: none; padding: 4px 10px; border-radius: 7px; background: rgba(8,18,28,0.9); border: 1px solid rgba(140, 200, 255, 0.35); color: #fff; font-size: 13px; display: none; }
+  #credit { bottom: 16px; right: 16px; padding: 6px 12px; font-size: 11px; color: #6d8aa3; }
+  #slotWrap { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(4, 9, 15, 0.6); }
+  #slotWrap.hidden { display: none; }
+  #slotBox { width: 350px; text-align: center; padding: 20px 24px; }
+  #slotBox h3 { display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 2px; font-size: 15px; letter-spacing: 2px; color: #ffd34f; }
+  #slotBox h3 svg { width: 16px; height: 16px; }
+  #slotSub { font-size: 11px; color: #9fb8cc; margin-bottom: 14px; }
+  #reels { display: flex; gap: 10px; justify-content: center; margin-bottom: 16px; }
+  .reel { width: 72px; height: 72px; overflow: hidden; border-radius: 10px; background: #0a1219; border: 2px solid rgba(255, 211, 79, 0.55); box-shadow: inset 0 0 14px rgba(0,0,0,0.6); }
+  .reel .strip { display: flex; flex-direction: column; transition: none; }
+  .reel .strip span { height: 72px; display: flex; align-items: center; justify-content: center; }
+  .reel .strip span svg { width: 40px; height: 40px; }
+  .reel.idle .strip { animation: reelIdle linear infinite; }
+  @keyframes reelIdle { from { transform: translateY(-216px); } to { transform: translateY(0); } }
+  #btnSpin { margin: 0 auto; display: block; padding: 10px 30px; font-size: 15px; font-weight: 700; color: #0b1118; background: linear-gradient(180deg, #ffd34f, #ffb52e); border: 1px solid rgba(255, 211, 79, 0.8); border-radius: 10px; cursor: pointer; }
+  #btnSpin:disabled { opacity: 0.5; cursor: not-allowed; }
+  #slotResult { margin-top: 12px; min-height: 20px; font-size: 15px; font-weight: 700; color: #ffd34f; }
+  #breedWrap { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; background: rgba(4, 9, 15, 0.6); }
+  #breedWrap.hidden { display: none; }
+  #breedBox { width: 330px; text-align: center; padding: 18px 20px; }
+  #breedBox h3 { display: flex; justify-content: center; align-items: center; gap: 8px; margin-bottom: 2px; font-size: 15px; letter-spacing: 2px; color: #ffd34f; }
+  #breedBox h3 svg { width: 16px; height: 16px; }
+  #breedSub { font-size: 11px; color: #9fb8cc; margin-bottom: 12px; }
+  #breedList { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; scrollbar-width: thin; margin-bottom: 14px; }
+  .breedPick { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 10px 14px; font-size: 13px; font-weight: 600; color: #eaf6ff; background: rgba(79, 209, 255, 0.1); border: 1px solid rgba(79, 209, 255, 0.3); border-radius: 10px; cursor: pointer; }
+  .breedPick svg { width: 16px; height: 16px; flex: none; }
+  .breedPick b { color: #fff; }
+  .breedPick span { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 400; color: #9fb8cc; }
+  .breedPick span svg { width: 11px; height: 11px; }
+  .breedPick:hover { background: rgba(79, 209, 255, 0.22); }
+  .breedPick.pick { background: rgba(255, 211, 79, 0.16); border-color: rgba(255, 211, 79, 0.65); }
+  #btnBreedCancel { padding: 9px 26px; font-size: 13px; font-weight: 700; color: #eaf6ff; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+  #breedActions { display: none; gap: 8px; margin-bottom: 10px; }
+  #breedActions.on { display: flex; }
+  #breedActions button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 10px; font-size: 13px; font-weight: 700; color: #eaf6ff; background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+  #breedActions button svg { width: 14px; height: 14px; }
+  #btnBreedGo { background: rgba(255, 211, 79, 0.18); border-color: rgba(255, 211, 79, 0.65); }
+  #btnBreedGo:hover { background: rgba(255, 211, 79, 0.32); }
+  .pairRow { display: flex; align-items: stretch; gap: 8px; }
+  .pairCard { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 74px; padding: 10px 8px; font-size: 12px; font-weight: 700; color: #fff; background: rgba(255, 211, 79, 0.10); border: 1px solid rgba(255, 211, 79, 0.5); border-radius: 10px; }
+  .pairCard svg { width: 22px; height: 22px; }
+  .pairCard small { display: flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 400; color: #9fb8cc; }
+  .pairCard small svg { width: 10px; height: 10px; }
+  .pairX { align-self: center; font-size: 16px; font-weight: 700; color: #ffd34f; }
+  #loader { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; background: linear-gradient(180deg, #0b1118 0%, #101c28 55%, #182634 100%); transition: opacity .8s; }
+  #loader.fade { opacity: 0; pointer-events: none; }
+  #loadTitle { font-size: 34px; font-weight: 700; letter-spacing: 10px; color: #eaf6ff; margin-bottom: 6px; }
+  #loadTitle span { color: var(--accent); }
+  #loadSub { color: #7d97ad; font-size: 11px; letter-spacing: 4px; margin-bottom: 34px; }
+  #loadScene { position: relative; width: 320px; height: 96px; margin-bottom: 22px; }
+  .lf { position: absolute; left: 0; width: 30px; height: 18px; animation: lfAcross linear infinite; }
+  .lf::before { content: ""; position: absolute; left: 7px; top: 0; width: 24px; height: 18px; background: var(--c, #4fd1ff); border-radius: 50%; }
+  .lf::after { content: ""; position: absolute; left: 0; top: 50%; width: 0; height: 0; margin-top: -7px; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-right: 9px solid var(--c, #4fd1ff); }
+  .lfr { animation-name: lfAcrossR; }
+  @keyframes lfAcross { from { transform: translateX(-50px); } to { transform: translateX(350px); } }
+  @keyframes lfAcrossR { from { transform: translateX(350px) scaleX(-1); } to { transform: translateX(-50px) scaleX(-1); } }
+  .lb { position: absolute; bottom: 0; width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(140,200,255,0.4); background: rgba(140,200,255,0.1); animation: lbRise linear infinite; }
+  @keyframes lbRise { from { transform: translateY(0); opacity: 0; } 15% { opacity: 0.7; } to { transform: translateY(-90px); opacity: 0; } }
+  #loadBar { width: 240px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.08); overflow: hidden; }
+  #loadBar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 2px; transition: width .3s; }
+  #loadBar.err i { background: #ff5f4f; }
+  #loadMsg { margin-top: 14px; color: #7d97ad; font-size: 12.5px; letter-spacing: 1px; animation: loadPulse 1.6s ease-in-out infinite; }
+  #loadMsg.err { color: #ff8f7d; font-weight: 600; animation: none; }
+  @keyframes loadPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+  #hintTag { display: block; font-size: 10px; letter-spacing: 2px; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .toast { animation: none; }
+    #coinPill, #coinPill.bump { transition: none; transform: none; box-shadow: none; }
+    #actions button:active:not(:disabled) { transform: none; }
+    .lf, .lb, #loadMsg { animation: none; }
+    .reel .strip { transition: none !important; }
+    .reel.idle .strip { animation: none; }
+    .resRow .bar i { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="vignette"></div>
+
+<div class="panel" id="titlebar">
+  <h1>FISH<span>VILLE</span></h1>
+  <div id="coinPill"></div>
+  <div id="timePill"></div>
+</div>
+
+<div id="rightCol">
+  <div class="panel" id="actions">
+    <button id="btnFeed"></button>
+    <button id="btnShop"></button>
+    <button id="btnBreed"></button>
+    <button id="btnMute"></button>
+    <button id="btnReset" class="warn"></button>
+  </div>
+
+  <div class="panel" id="strip">
+    <div id="stripCounts">
+      <span class="cnt" id="cntFish"></span>
+      <span class="cnt eggs" id="cntEggs"></span>
+      <button id="btnExpand" class="iconBtn" title="Expand — view all residents" aria-label="Expand residents panel"></button>
+      <button id="btnHideStrip" class="iconBtn" title="Hide panel" aria-label="Hide residents panel"></button>
+    </div>
+  </div>
+  <button id="btnShowStrip" class="hidden" title="Show residents" aria-label="Show residents panel"></button>
+</div>
+
+  <div class="panel" id="hint"><span id="hintTag">TIP</span><span id="hintMsg"></span></div>
+<div class="panel" id="credit">FishVille · low-poly tank</div>
+<div id="toasts"></div>
+<div id="tip"></div>
+
+<div id="slotWrap" class="hidden">
+  <div class="panel blurred" id="slotBox">
+    <h3>TREASURE!</h3>
+    <div id="slotSub">One free spin — pull the lever!</div>
+    <div id="reels">
+      <div class="reel"><div class="strip"></div></div>
+      <div class="reel"><div class="strip"></div></div>
+      <div class="reel"><div class="strip"></div></div>
+    </div>
+    <button id="btnSpin">SPIN</button>
+    <div id="slotResult"></div>
+  </div>
+</div>
+
+<div id="breedWrap" class="hidden">
+  <div class="panel blurred" id="breedBox">
+    <h3>CHOOSE A PAIR</h3>
+    <div id="breedSub">Pick two adults — the pair will lay 2–4 eggs.</div>
+    <div id="breedList"></div>
+    <div id="breedActions">
+      <button id="btnBreedBack">← Pick different</button>
+      <button id="btnBreedGo"></button>
+    </div>
+    <button id="btnBreedCancel">✕ Cancel</button>
+  </div>
+</div>
+
+<div id="resWrap" class="hidden">
+  <div class="panel blurred" id="resBox">
+    <h3>INHABITANTS</h3>
+    <div id="resSub"></div>
+    <div id="resList"></div>
+    <button id="btnResClose">Close</button>
+  </div>
+</div>
+
+<div id="shopWrap" class="hidden">
+  <div class="panel blurred" id="shopBox">
+    <h3 id="shopTitle">SHOP</h3>
+    <div id="shopSub"></div>
+    <div id="shopList">
+      <div class="shopRow" id="shopFeedRow">
+        <img class="shopImg" id="shopFeedImg" alt="Flakes">
+        <div class="resInfo">
+          <div class="top"><b>Flakes</b><span class="stage" id="shopFeedSub"></span></div>
+          <div id="feedQtyWrap" title="How many portions to buy"><button id="btnFeedMinus" type="button">−</button><span id="feedQtyVal"></span><button id="btnFeedPlus" type="button">+</button></div>
+        </div>
+        <button id="btnShopFeed" class="buyBtn"></button>
+      </div>
+    </div>
+    <button id="btnShopClose">Close</button>
+  </div>
+</div>
+
+<div id="awayWrap" class="hidden">
+  <div class="panel blurred" id="awayBox">
+    <h3 id="awayTitle"></h3>
+    <div id="awaySub"></div>
+    <div id="awayList"></div>
+    <button id="btnAwayClose">Back to the tank</button>
+  </div>
+</div>
+
+<div id="confirmWrap" class="hidden">
+  <div class="panel blurred" id="confirmBox">
+    <h3 id="confirmTitle"></h3>
+    <div id="confirmText"></div>
+    <div id="confirmActions">
+      <button id="btnConfirmNo">Cancel</button>
+      <button id="btnConfirmYes">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div id="loader">
+  <div id="loadTitle">FISH<span>VILLE</span></div>
+  <div id="loadSub">3D AQUARIUM</div>
+  <div id="loadScene">
+    <span class="lf" style="top:8px; --c:#4fd1ff; animation-duration:9s; animation-delay:-2s"></span>
+    <span class="lf lfr" style="top:38px; --c:#ffd34f; animation-duration:12s; animation-delay:-6s"></span>
+    <span class="lf lfr" style="top:64px; --c:#ff9e6e; animation-duration:10s; animation-delay:-4s"></span>
+    <span class="lb" style="left:50px; animation-duration:4.2s; animation-delay:-1s"></span>
+    <span class="lb" style="left:150px; width:6px; height:6px; animation-duration:3.6s; animation-delay:-2.5s"></span>
+    <span class="lb" style="left:240px; animation-duration:4.8s; animation-delay:-0.8s"></span>
+  </div>
+  <div id="loadBar"><i></i></div>
+  <div id="loadMsg">Filling up the tank…</div>
+</div>
+<script>
+(function () {
+  var fill = document.querySelector('#loadBar i'),
+      bar = document.getElementById('loadBar'),
+      msg = document.getElementById('loadMsg'),
+      loader = document.getElementById('loader'),
+      start = performance.now(), done = false, failed = false;
+  function finish() {
+    if (done) return;
+    var wait = Math.max(0, 1500 - (performance.now() - start));
+    setTimeout(function () {
+      done = true;
+      msg.classList.remove('err');
+      bar.classList.remove('err');
+      fill.style.width = '100%';
+      loader.classList.add('fade');
+      setTimeout(function () { loader.remove(); }, 850);
+    }, wait);
+  }
+  var tick = setInterval(function () {
+    if (done || failed) { clearInterval(tick); return; }
+    var s = (performance.now() - start) / 1000;
+    fill.style.width = Math.min(90, 25 + s * 32) + '%';
+    if (s > 12) {
+      failed = true;
+      msg.textContent = 'Connection problem — please check your internet connection';
+      msg.classList.add('err');
+      bar.classList.add('err');
+      fill.style.width = '100%';
+    }
+  }, 100);
+  var probe = setInterval(function () {
+    if (window.__FV_BOOTED) { clearInterval(probe); finish(); }
+  }, 100);
+})();
+</script>
+
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---------- Config ----------
+const TANK = { halfW: 10.5, halfD: 6.5, sandTop: 1.0, waterTop: 13.0 };
+const FISH_MIN = new THREE.Vector3(-9.3, 1.8, -5.3);
+const FISH_MAX = new THREE.Vector3(9.3, 11.7, 5.3);
+const START_COINS = 100; // Ronde 15 — koin awal game (fresh boot & reset)
+const COST_FEED = 15; // Ronde 14 — harga 1 porsi flake di shop (Ronde 9: 5)
+const FEED_QTY_MAX = 10; // Ronde 10.5 — max porsi beli per transaksi di shop (1 klik Feed = 1 porsi dari stok)
+const FLAKES_PER_PORSION = 10; // Ronde 14 — jumlah flakes per porsi (Ronde 10: 8)
+const SELL_STAGE_FRAC = [0.5, 1, 2]; // Ronde 14 — harga jual = round(eggPrice × faktor tahap fry/juv/adult); variant ×2
+const COST_BREED = 200; // Ronde 16 — biaya breeding, dibayar saat konfirmasi pairing (dulu gratis)
+const STARVE_TOAST = 99, BUBBLE_ON = 5, BUBBLE_COOLDOWN = 5; // Ronde 8 — hunger bubble: tampil 5 s, cooldown 5 s, berulang selama masih lapar
+const HATCH_TIME = 900, FAST_HATCH = 120, BREED_CD = 30 * 60; // Ronde 10 — hatching 15 menit; FAST_HATCH: telur pertama di tank kosong menetas ±2 menit. Ronde 16 — BREED_CD 30 menit (dulu 60 s); MAX_COINS_IN_TANK dihapus (koin ambient dihapus)
+const SAVE_KEY = 'fishville_v5', SAVE_KEY_OLD = 'fishville_v4', SAVE_KEY_OLDEST = 'fishville_v3'; // Ronde 10.5 — v5 menambah field feedStock; chain tetap baca v4/v3
+// Hunger & growth tuning — hunger 0 = full, 100 = starving (UI bar shows fullness = 100 - hunger)
+const HUNGER_DECAY = 100 / 10800, HUNGER_EAT = 35; // Ronde 14 — full bar (0) → starving (100) = 3 jam (10800 s) base; modulator tahap tetap (fry ±2,6 jam, adult ±3,3 jam); HUNGER_EAT tak berubah
+const CHASE_HUNGER = 35;     // fish only chase food at or above this hunger
+const HUNGER_ALERT = 70; // Ronde 8 — ambang bubble "HUNGRY!" (hunger >= 70)
+const EAT_MIN_HUNGER = 10;   // fish refuse to eat below this
+const GROW_MIN_HUNGER = 20;  // flake bonus only accrues at or above this
+const GROW_GAIN = [0.25, 0.1, 0]; // Ronde 14 — growth HANYA dari makan (pts/flake, gate GROW_MIN_HUNGER): fry 12 flake → juvenile (3 pts), juvenile 40 flake → adult (7 pts)
+const STARVE_KILL = [10800, 10800, 18000]; // Ronde 14 — vonis mati saat bar hunger penuh: fry/juvenile 3 jam, adult 5 jam (reset saat makan)
+const STARVE_SPEED = 0.7;    // speed multiplier at hunger >= 95
+const ADULT_LIFESPAN = 24 * 3600; // seconds an adult lives
+const SENIOR_FRAC = 0.8, SENIOR_SPEED = 0.8; // past this fraction of lifespan: slow + gray
+const DIE_DURATION = 2.5;    // seconds for the death (sink + fade) animation
+// Treasure & slots
+const TREASURE_FIRST = 600, TREASURE_NEXT = 600; // Ronde 8 — chest every 10 minutes (fixed, no jitter)
+// Ronde 11 — behavior: poke/flee, separation
+const FLEE_TIME = 0.7, FLEE_SPEED = 2.2, FLEE_DIST = 4, POKE_CD = 2; // poke: dash menjauh 0,7 s @ 2,2×; cooldown 2 s per ikan
+const SEP_K = 8; // separation: kekuatan tolak lembut antar-ikan (falloff linier)
+const BREED_TIME = 5, HEART_EVERY = 0.35; // Ronde 12 — bonding 5 s + love scene: hati baru tiap 0,35 s
+// Ronde 13 — real time: lastSeen (wall clock) + catch-up
+const META_KEY = 'fishville_meta'; // key terpisah dari save v5 (tanpa migrasi); { lastSeen: ms }
+const OFFLINE_MAX = 24 * 3600; // cap wall-clock away (detik) — anti clock-manipulasi + cap biaya
+const REPLAY_MAX = 600; // away ≤ ini (detik) → replay full-fidelity 0,25 s; > ini → jalur analitik
+const ANALYTIC_STEP = 60; // detik per langkah state jalur analitik (hanya hunger/growth/age, tanpa AI/scene)
+const AWAY_REPORT_MIN = 60; // away ≥ ini (detik) → modal "While you were away"
+
+// ---------- Fish species (7 data-driven species, round 5) ----------
+// Body texture UV convention (lathe): canvas x: 0 = belly, W/4 = +X side, W/2 = back, 3W/4 = -X side (wraps to belly).
+// Canvas y: 0 = tail, H = head. t along the body: 0 = snout, 1 = tail base. _bandY maps t to canvas y.
+const _bandY = (t, H) => (1 - t) * H;
+function paintClown(ctx, W, H) { // 3 white vertical bands w/ thin dark edges
+  for (const [t, w] of [[0.16, 0.10], [0.46, 0.12], [0.72, 0.10]]) {
+    const y = _bandY(t, H);
+    ctx.fillStyle = 'rgba(26,14,8,0.85)';
+    ctx.fillRect(0, y - (w + 0.03) * H / 2, W, (w + 0.03) * H);
+    ctx.fillStyle = '#fff6e2';
+    ctx.fillRect(0, y - w * H / 2, W, w * H);
+  }
+}
+function paintBetta() { /* solid — the flowing fins carry the look */ }
+function paintTetra(ctx, W, H) { // electric blue lateral stripe + red patch behind
+  for (const x of [W * 0.25, W * 0.75]) {
+    ctx.fillStyle = '#19c9f2';
+    ctx.fillRect(x - W * 0.035, _bandY(0.85, H), W * 0.07, _bandY(0.05, H) - _bandY(0.85, H));
+    ctx.fillStyle = '#ff4433';
+    ctx.fillRect(x - W * 0.045, _bandY(0.88, H), W * 0.09, _bandY(0.55, H) - _bandY(0.88, H));
+  }
+}
+function paintAngel(ctx, W, H) { // dark vertical bars + mask through the eye
+  for (const [t, w] of [[0.30, 0.075], [0.55, 0.085], [0.78, 0.07]]) {
+    const y = _bandY(t, H);
+    ctx.fillStyle = 'rgba(28,32,40,0.85)';
+    ctx.fillRect(0, y - w * H / 2, W, w * H);
+  }
+  ctx.fillStyle = 'rgba(24,28,36,0.55)';
+  ctx.fillRect(0, _bandY(0.2, H), W, H - _bandY(0.2, H));
+}
+function paintGold() { /* solid orange */ }
+function paintGuppy(ctx, W, H) { // iridescent speckles (unique per fish)
+  for (let i = 0; i < 70; i++) {
+    const x = Math.random() * W, y = H * 0.3 + Math.random() * H * 0.68;
+    ctx.fillStyle = Math.random() < 0.5 ? 'rgba(255,170,60,0.75)' : 'rgba(255,255,255,0.5)';
+    ctx.beginPath(); ctx.arc(x, y, 0.8 + Math.random() * 1.6, 0, 6.283); ctx.fill();
+  }
+}
+function paintDiscus(ctx, W, H) { // pale vertical bars + faint lateral line
+  for (let i = 0; i < 5; i++) {
+    const t = 0.18 + i * 0.145, y = _bandY(t, H), w = 0.05;
+    ctx.fillStyle = 'rgba(190,225,255,0.75)';
+    ctx.fillRect(0, y - w * H / 2, W, w * H);
+  }
+  ctx.fillStyle = 'rgba(20,60,120,0.35)';
+  for (const x of [W * 0.25, W * 0.75]) ctx.fillRect(x - W * 0.012, 0, W * 0.024, H);
+}
+const SPECIES = [
+  { id: 'clown', name: 'Clownfish', size: 1.0, speed: 1.0, eggs: [2, 4], eggPrice: 35,
+    move: { depth: [3.5, 8.5], turn: 1.2, dart: 0.35, hover: 0.15, idle: 0.10, social: 0.4 }, // Ronde 11 — mid, lincah, schooling ringan; Ronde 12 — idle = peluang bengong
+    body: { len: 1.1, h: 0.52, x: 0.55, profile: [[0, 0], [0.05, 0.5], [0.15, 0.78], [0.3, 0.92], [0.45, 1], [0.6, 0.9], [0.78, 0.68], [0.9, 0.4], [1, 0]] },
+    tail: { fork: 0.25, span: 0.55, len: 0.42, flow: 0.35 },
+    dorsal: { t0: 0.15, t1: 0.75, h: 0.36, curve: 0.45 },
+    anal: { t0: 0.45, t1: 0.8, h: 0.3, curve: 0.45 },
+    pec: { t: 0.3, len: 0.3, splay: 0.9 },
+    eye: { t: 0.16, y: 0.06, r: 0.07 },
+    tailAnim: { amp: 0.5, freq: 1.0 },
+    colors: { body: 0xff7a26, fin: 0xfff1dc, finAlpha: 1 },
+    paint: paintClown },
+  { id: 'betta', name: 'Betta', size: 0.9, speed: 1.1, eggs: [2, 3], eggPrice: 30,
+    move: { depth: [5, 9.5], turn: 0.9, dart: 0.15, hover: 0.35, idle: 0.20, social: -0.5 }, // Ronde 11 — mid-atas, cruise, sering hover, teritorial; Ronde 12 — idle
+    body: { len: 1.0, h: 0.34, x: 0.5, profile: [[0, 0], [0.05, 0.55], [0.2, 0.85], [0.35, 1], [0.5, 0.92], [0.7, 0.7], [0.88, 0.4], [1, 0]] },
+    tail: { fork: 0, span: 0.95, len: 0.5, flow: 0.8 },
+    dorsal: { t0: 0.2, t1: 0.65, h: 0.42, curve: 0.7 },
+    anal: { t0: 0.4, t1: 0.85, h: 0.46, curve: 0.7 },
+    pec: { t: 0.3, len: 0.26, splay: 0.8 },
+    eye: { t: 0.15, y: 0.05, r: 0.06 },
+    tailAnim: { amp: 0.7, freq: 0.7 },
+    colors: { body: 0xc22b3a, fin: 0xa01f33, finAlpha: 0.82 },
+    paint: paintBetta },
+  { id: 'tetra', name: 'Neon Tetra', size: 0.7, speed: 1.3, eggs: [4, 6], eggPrice: 25,
+    move: { depth: [7.5, 11.5], turn: 1.4, dart: 0.5, hover: 0.1, idle: 0.08, social: 0.6 }, // Ronde 11 — permukaan, sering dart, schooling kuat; Ronde 12 — idle
+    body: { len: 1.0, h: 0.3, x: 0.5, profile: [[0, 0], [0.04, 0.5], [0.15, 0.8], [0.3, 0.95], [0.45, 1], [0.62, 0.88], [0.8, 0.6], [0.92, 0.3], [1, 0]] },
+    tail: { fork: 0.35, span: 0.4, len: 0.3, flow: 0.3 },
+    dorsal: { t0: 0.35, t1: 0.6, h: 0.18, curve: 0.5 },
+    anal: { t0: 0.55, t1: 0.78, h: 0.15, curve: 0.5 },
+    pec: { t: 0.3, len: 0.24, splay: 0.8 },
+    eye: { t: 0.14, y: 0.03, r: 0.05 },
+    tailAnim: { amp: 0.35, freq: 1.5 },
+    colors: { body: 0xa8c8dd, fin: 0x9fb8cc, finAlpha: 0.7 },
+    paint: paintTetra },
+  { id: 'angel', name: 'Angelfish', size: 1.3, speed: 0.9, eggs: [2, 3], eggPrice: 45,
+    move: { depth: [3.5, 9], turn: 0.6, dart: 0.1, hover: 0.3, idle: 0.18, social: -0.35 }, // Ronde 11 — mid, belok lambat, jarang dart, teritorial; Ronde 12 — idle
+    body: { len: 1.0, h: 0.75, x: 0.28, profile: [[0, 0], [0.05, 0.45], [0.15, 0.72], [0.3, 0.9], [0.5, 1], [0.7, 0.88], [0.85, 0.62], [0.95, 0.3], [1, 0]] },
+    tail: { fork: 0.15, span: 0.5, len: 0.34, flow: 0.6 },
+    dorsal: { t0: 0.15, t1: 0.6, h: 0.5, curve: 0.65 },
+    anal: { t0: 0.45, t1: 0.85, h: 0.5, curve: 0.65 },
+    pec: { t: 0.32, len: 0.3, splay: 1.0 },
+    eye: { t: 0.18, y: 0.08, r: 0.06 },
+    tailAnim: { amp: 0.45, freq: 0.6 },
+    colors: { body: 0xd8dde2, fin: 0xb9c2cc, finAlpha: 0.75 },
+    paint: paintAngel },
+  { id: 'gold', name: 'Goldfish', size: 1.1, speed: 0.85, eggs: [3, 5], eggPrice: 35,
+    move: { depth: [2.5, 7], turn: 0.8, dart: 0.25, hover: 0.2, idle: 0.15, social: 0.15 }, // Ronde 11 — mid-bawah, cruise santai; Ronde 12 — idle
+    body: { len: 1.0, h: 0.52, x: 0.6, profile: [[0, 0], [0.05, 0.55], [0.15, 0.82], [0.3, 0.95], [0.45, 1], [0.62, 0.88], [0.8, 0.62], [0.92, 0.35], [1, 0]] },
+    tail: { fork: 0.55, span: 0.75, len: 0.45, flow: 0.4 },
+    dorsal: { t0: 0.3, t1: 0.58, h: 0.34, curve: 0.5 },
+    anal: { t0: 0.5, t1: 0.7, h: 0.22, curve: 0.5 },
+    pec: { t: 0.28, len: 0.28, splay: 0.9 },
+    eye: { t: 0.17, y: 0.05, r: 0.07 },
+    tailAnim: { amp: 0.55, freq: 0.8 },
+    colors: { body: 0xffa040, fin: 0xff9636, finAlpha: 0.9 },
+    paint: paintGold },
+  { id: 'guppy', name: 'Guppy', size: 0.65, speed: 1.2, eggs: [4, 6], eggPrice: 20,
+    move: { depth: [7, 11.5], turn: 1.3, dart: 0.5, hover: 0.1, idle: 0.08, social: 0.5 }, // Ronde 11 — permukaan, sering dart, schooling; Ronde 12 — idle
+    body: { len: 1.0, h: 0.38, x: 0.5, profile: [[0, 0], [0.05, 0.5], [0.15, 0.75], [0.3, 0.9], [0.45, 1], [0.62, 0.85], [0.8, 0.55], [0.92, 0.3], [1, 0]] },
+    tail: { fork: 0, span: 0.8, len: 0.42, flow: 0.7 },
+    dorsal: { t0: 0.3, t1: 0.55, h: 0.2, curve: 0.5 },
+    anal: { t0: 0.55, t1: 0.72, h: 0.13, curve: 0.5 },
+    pec: { t: 0.3, len: 0.22, splay: 0.8 },
+    eye: { t: 0.14, y: 0.03, r: 0.05 },
+    tailAnim: { amp: 0.4, freq: 1.4 },
+    colors: { body: 0x3fa7d6, fin: 0xff6a3d, finAlpha: 0.9 },
+    paint: paintGuppy },
+  { id: 'discus', name: 'Discus', size: 1.4, speed: 0.8, eggs: [2, 3], eggPrice: 50,
+    move: { depth: [4, 9], turn: 0.5, dart: 0.05, hover: 0.35, idle: 0.25, social: 0.3 }, // Ronde 11 — mid, paling lambat, sering hover; Ronde 12 — idle (paling sering bengong)
+    body: { len: 1.0, h: 0.9, x: 0.32, profile: [[0, 0], [0.05, 0.4], [0.15, 0.68], [0.3, 0.88], [0.5, 1], [0.7, 0.88], [0.85, 0.68], [0.95, 0.4], [1, 0]] },
+    tail: { fork: 0.1, span: 0.45, len: 0.26, flow: 0.5 },
+    dorsal: { t0: 0.25, t1: 0.55, h: 0.28, curve: 0.55 },
+    anal: { t0: 0.45, t1: 0.7, h: 0.26, curve: 0.55 },
+    pec: { t: 0.3, len: 0.24, splay: 0.8 },
+    eye: { t: 0.2, y: 0.12, r: 0.06 },
+    tailAnim: { amp: 0.3, freq: 0.55 },
+    colors: { body: 0x2f7fd4, fin: 0x2a6fb8, finAlpha: 0.85 },
+    paint: paintDiscus },
+];
+const STAGE = [
+  { name: 'Fry',      scale: 0.50, speed: 1.7 },
+  { name: 'Juvenile', scale: 0.80, speed: 2.7 },
+  { name: 'Adult',    scale: 1.15, speed: 3.7 },
+];
+const NAMES = ['Pip','Miso','Reef','Splash','Bubbles','Ember','Tide','Pearl','Finn','Marlin','Guppy','Nori','Coral','Ziggy','Dory','Pebble','Kelp','Sandy','Riff','Wavy','Ozzy','Mochi'];
+
+// ---------- HUD icons (round 6: emoji removed — inline SVG, no CDN) ----------
+const ICONS = {
+  coin:      '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="12" r="4.8" fill="none" stroke="currentColor" stroke-width="1.8"/>',
+  egg:       '<path d="M12 3.2c3.6 0 6.6 5.2 6.6 9.8a6.6 6.6 0 1 1-13.2 0C5.4 8.4 8.4 3.2 12 3.2z"/>',
+  flakes:    '<circle cx="6.5" cy="14.5" r="2"/><circle cx="12" cy="8.5" r="2"/><circle cx="17.5" cy="14.5" r="2"/>',
+  heart:     '<path d="M12 20.4l-1.1-1C7 15.6 3.4 12.4 3.4 8.7 3.4 6.2 5.4 4.2 7.9 4.2c1.6 0 3.1.8 4.1 2.1 1-1.3 2.5-2.1 4.1-2.1 2.5 0 4.5 2 4.5 4.5 0 3.7-3.6 6.9-7.5 10.7l-1.1 1z"/>',
+  'vol-on':  '<path d="M4 9.5v5h3.2L12 18.6V5.4L7.2 9.5H4z"/><path d="M15.5 9a4.4 4.4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18 6.8a8 8 0 0 1 0 10.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  'vol-off': '<path d="M4 9.5v5h3.2L12 18.6V5.4L7.2 9.5H4z"/><path d="M15.5 9.5l5 5M20.5 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  clock:     '<circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7.4V12l3.4 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  gem:       '<path d="M7 4h10l4 5.2L12 20 3 9.2 7 4z"/>',
+  fish:      '<path d="M2.2 12C4.7 8.4 8.8 6.6 12.4 7.3c2 .4 3.8 1.9 4.8 4.7-1 2.8-2.8 4.3-4.8 4.7-3.6.7-7.7-1.1-10.2-4.7z"/><path d="M17.2 12l4.6-3.9-1.2 3.9 1.2 3.9z"/>',
+  sparkle:   '<path d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z"/>',
+  hourglass: '<path d="M5 3h14v2.2L13.6 12l5.4 6.8V21H5v-2.2L10.4 12 5 5.2V3z"/>',
+  chest:     '<path d="M4 10.4C4 7 7.6 4.6 12 4.6S20 7 20 10.4v1.2H4z"/><path d="M4 13h16v6.4H4z"/>',
+  reset:     '<path d="M12 5a7 7 0 1 1-6.4 4.1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M5.2 3.4v6h6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+  list:      '<path d="M4 6h16M4 12h16M4 18h16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
+  hide:      '<path d="M6 12h12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>',
+};
+function icon(name, color = null, size = '1em') {
+  const st = color ? ` style="color:${color}"` : '';
+  return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"${st}>${ICONS[name]}</svg>`;
+}
+function spHex(i) { return '#' + SPECIES[i].colors.body.toString(16).padStart(6, '0'); }
+
+// ---------- State ----------
+const state = {
+  coins: START_COINS, feedStock: 0, fish: [], eggs: [], foods: [], floats: [],
+  breedCd: 0, breeding: null, mating: null, muted: false, nextFishId: 1,
+  treasure: null, treasureTimer: TREASURE_FIRST,
+};
+
+// ---------- Renderer / scene ----------
+const app = document.getElementById('app');
+const clock = new THREE.Clock(); // moved up (Ronde 8) — HUD code needs it before the main-loop section
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x182634);
+scene.fog = new THREE.FogExp2(0x182634, 0.004);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 300);
+camera.position.set(16, 11.5, 19);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 6.5, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 15;
+controls.maxDistance = 46;
+controls.maxPolarAngle = 1.52;
+controls.minPolarAngle = 0.12;
+controls.enablePan = false;
+
+// Smooth dolly — OrbitControls' built-in zoom snaps a full ~5% step per wheel event
+// (regardless of delta magnitude), so trackpad flicks (a flood of small events)
+// jump the camera far and the zoom feels stiff next to the damped rotation.
+// Instead: accumulate a goal distance from the scroll amount, ease toward it per frame.
+controls.enableZoom = false;
+let zoomGoal = camera.position.distanceTo(controls.target);
+renderer.domElement.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const px = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
+  zoomGoal = THREE.MathUtils.clamp(zoomGoal * Math.pow(1.05, px / 100), controls.minDistance, controls.maxDistance);
+}, { passive: false });
+const _zoomDir = new THREE.Vector3();
+
+// ---------- Lights ----------
+scene.add(new THREE.HemisphereLight(0xbfe4ff, 0x2e434f, 1.35));
+scene.add(new THREE.AmbientLight(0x3d5866, 0.55));
+const sun = new THREE.DirectionalLight(0xfff4e0, 2.6);
+sun.position.set(8, 20, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -16; sun.shadow.camera.right = 16;
+sun.shadow.camera.top = 18; sun.shadow.camera.bottom = -16;
+sun.shadow.camera.near = 2; sun.shadow.camera.far = 50;
+scene.add(sun);
+const fill = new THREE.PointLight(0x66ccff, 90, 45, 2);
+fill.position.set(0, 10, 0);
+scene.add(fill);
+
+// ---------- Tank construction ----------
+const tank = new THREE.Group();
+scene.add(tank);
+const swayers = []; // {obj, phase, amp}
+
+const matFlat = (c, rough = 0.85, metal = 0.05) =>
+  new THREE.MeshStandardMaterial({ color: c, flatShading: true, roughness: rough, metalness: metal });
+
+// Base pedestal (top kept below the sand's lowest dune to avoid z-fighting)
+const pedestal = new THREE.Mesh(new THREE.BoxGeometry(22.8, 2.2, 14.8), matFlat(0x11151b, 0.6, 0.3));
+pedestal.position.y = -0.45;
+pedestal.receiveShadow = true;
+tank.add(pedestal);
+
+// Sand with gentle dunes
+{
+  const g = new THREE.PlaneGeometry(21.2, 13.2, 26, 16);
+  g.rotateX(-Math.PI / 2);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    p.setY(i, Math.sin(x * 0.55) * Math.cos(z * 0.8) * 0.08 + Math.sin(x * 1.7 + z * 1.3) * 0.04);
+  }
+  g.computeVertexNormals();
+  const sand = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: 0xe8d5a3, flatShading: true, roughness: 0.95 }));
+  sand.position.y = TANK.sandTop - 0.05;
+  sand.receiveShadow = true;
+  tank.add(sand);
+}
+
+// Glass
+{
+  const glass = new THREE.Mesh(
+    new THREE.BoxGeometry(21.4, 12.6, 13.4),
+    new THREE.MeshPhongMaterial({
+      color: 0xa8dcf0, transparent: true, opacity: 0.13, shininess: 140,
+      specular: 0x99ccff, side: THREE.FrontSide, depthWrite: false,
+    })
+  );
+  glass.position.y = 7.3;
+  glass.renderOrder = 3;
+  tank.add(glass);
+}
+
+// Frame (dark)
+{
+  const fm = matFlat(0x14181f, 0.5, 0.35);
+  const add = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), fm); m.position.set(x, y, z); tank.add(m); };
+  for (const s of [1, -1]) {
+    add(22.2, 0.55, 0.55, 0, 13.62, s * 6.72);
+    add(0.55, 0.55, 13.9, s * 10.88, 13.62, 0);
+    add(22.2, 0.4, 0.4, 0, 0.92, s * 6.72);
+    add(0.4, 0.4, 13.9, s * 10.88, 0.92, 0);
+  }
+  for (const sx of [1, -1]) for (const sz of [1, -1])
+    add(0.55, 13.2, 0.55, sx * 10.88, 7.3, sz * 6.72);
+}
+
+// Rocks
+function addRock(r, x, y, z, squash = 1) {
+  const m = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), matFlat(0x8b939e, 0.9));
+  m.position.set(x, y, z);
+  m.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+  m.scale.y = squash;
+  m.castShadow = true; m.receiveShadow = true;
+  tank.add(m);
+}
+addRock(2.0, -7.8, 1.9, -2.6, 0.8);
+addRock(1.5, -6.9, 3.4, -2.9, 0.85);
+addRock(1.2, -8.3, 1.6, -1.4, 0.9);
+addRock(1.0, -7.9, 4.4, -2.5, 0.8);
+addRock(0.9, 5.6, 1.7, 3.2, 0.85);
+addRock(0.7, 8.2, 1.5, -3.6, 0.85);
+addRock(0.6, 2.0, 1.4, 4.6, 0.8);
+for (let i = 0; i < 10; i++)
+  addRock(0.22 + Math.random() * 0.22, -9 + Math.random() * 18, TANK.sandTop + 0.05, -5 + Math.random() * 10, 0.6);
+
+// Driftwood
+function branch(from, to, r0, r1) {
+  const d = new THREE.Vector3().subVectors(to, from);
+  const len = d.length();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 6), matFlat(0x6d4c2f, 0.95));
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+  m.position.copy(from).add(to).multiplyScalar(0.5);
+  m.castShadow = true;
+  tank.add(m);
+}
+branch(new THREE.Vector3(3.6, 1, -1.2), new THREE.Vector3(4.6, 5.2, -1.8), 0.95, 0.55);
+branch(new THREE.Vector3(4.6, 5.2, -1.8), new THREE.Vector3(5.9, 8.8, -2.4), 0.55, 0.3);
+branch(new THREE.Vector3(5.9, 8.8, -2.4), new THREE.Vector3(4.4, 11.2, -1.4), 0.3, 0.14);
+branch(new THREE.Vector3(4.3, 4.2, -1.6), new THREE.Vector3(2.3, 3.6, 0.9), 0.45, 0.2);
+branch(new THREE.Vector3(4.9, 6.2, -1.9), new THREE.Vector3(7.2, 5.6, -0.4), 0.4, 0.16);
+branch(new THREE.Vector3(2.9, 3.8, 0.3), new THREE.Vector3(1.6, 2.2, 1.4), 0.2, 0.09);
+branch(new THREE.Vector3(5.3, 7.4, -2.1), new THREE.Vector3(6.8, 8.2, -3.2), 0.24, 0.1);
+
+// Plants
+const LEAF = [0x3fa34d, 0x2f8f3f, 0x5cc763, 0x2a7d46];
+function grassTuft(x, z, count, minH = 1.0, maxH = 2.4, palette = LEAF) {
+  const g = new THREE.Group();
+  g.position.set(x, TANK.sandTop, z);
+  for (let i = 0; i < count; i++) {
+    const h = minH + Math.random() * (maxH - minH);
+    const blade = new THREE.Mesh(
+      new THREE.ConeGeometry(0.06 + Math.random() * 0.05, h, 5),
+      matFlat(palette[i % palette.length], 0.9)
+    );
+    blade.position.set((Math.random() - 0.5) * 1.1, h / 2 - 0.06, (Math.random() - 0.5) * 1.1);
+    blade.rotation.z = (Math.random() - 0.5) * 0.3;
+    blade.rotation.x = (Math.random() - 0.5) * 0.3;
+    g.add(blade);
+  }
+  tank.add(g);
+  swayers.push({ obj: g, phase: Math.random() * 6.28, amp: 0.04 + Math.random() * 0.03 });
+}
+for (const [x, z] of [[-9, -5], [-6.5, -5.2], [-3.5, -5.4], [-1, -5], [2, -5.3], [5.5, -5.1], [8.5, -4.8], [-9.2, 2.5], [-9, 4.8], [9.2, 1], [9, -2.5], [0, 5.2], [6.5, 4.8], [-4.5, 4.6]])
+  grassTuft(x, z, 9 + Math.floor(Math.random() * 6), 1.0, 2.8);
+// red accent plants near the rock pile
+grassTuft(-6.2, -3.6, 8, 0.7, 1.5, [0xd94f4f, 0xc03a3a, 0xe86a5a]);
+grassTuft(-5.4, -1.8, 7, 0.6, 1.3, [0xd94f4f, 0xc03a3a]);
+// leafy bushes
+function bush(x, z, r, c) {
+  const m = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), matFlat(c, 0.9));
+  m.position.set(x, TANK.sandTop + r * 0.55, z);
+  m.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+  m.scale.y = 0.8;
+  m.castShadow = true;
+  tank.add(m);
+  swayers.push({ obj: m, phase: Math.random() * 6.28, amp: 0.02 });
+}
+bush(-8.6, -3.8, 0.9, 0x2f8f3f);
+bush(7.4, 2.6, 0.8, 0x3fa34d);
+bush(0.6, -4.6, 0.7, 0x2a7d46);
+bush(8.6, -4.2, 0.75, 0x2f8f3f);
+bush(-2.4, 4.9, 0.7, 0x3fa34d);
+
+// Water volume tint (gives the interior its blue depth)
+{
+  const vol = new THREE.Mesh(
+    new THREE.BoxGeometry(21.2, 12.0, 13.2),
+    new THREE.MeshBasicMaterial({ color: 0x3a9cc9, transparent: true, opacity: 0.16, depthWrite: false })
+  );
+  vol.position.y = 7.0;
+  vol.renderOrder = 2;
+  scene.add(vol);
+}
+
+// Water surface (animated)
+const waterGeo = new THREE.PlaneGeometry(21.2, 13.2, 30, 18);
+waterGeo.rotateX(-Math.PI / 2);
+const water = new THREE.Mesh(waterGeo, new THREE.MeshPhongMaterial({
+  color: 0x8fe2ff, transparent: true, opacity: 0.5, shininess: 180,
+  specular: 0xffffff, side: THREE.DoubleSide, depthWrite: false,
+}));
+water.position.y = TANK.waterTop;
+water.renderOrder = 4;
+scene.add(water);
+
+// Caustic light patches on sand
+const glowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const grd = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,255,255,0.9)');
+  grd.addColorStop(0.4, 'rgba(200,240,255,0.35)');
+  grd.addColorStop(1, 'rgba(200,240,255,0)');
+  ctx.fillStyle = grd; ctx.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(c);
+})();
+const caustics = [];
+for (let i = 0; i < 7; i++) {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.5, 2.4),
+    new THREE.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: 0.08, blending: THREE.AdditiveBlending, depthWrite: false })
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(-9 + Math.random() * 18, TANK.sandTop + 0.06, -5 + Math.random() * 10);
+  m.renderOrder = 2;
+  scene.add(m);
+  caustics.push({ m, phase: Math.random() * 6.28, speed: 0.2 + Math.random() * 0.2 });
+}
+
+// Bubbles
+const bubbleGeo = new THREE.SphereGeometry(1, 8, 6);
+const bubbleMat = new THREE.MeshPhongMaterial({ color: 0xcfeeff, transparent: true, opacity: 0.45, shininess: 120 });
+const bubbles = [];
+const AERATORS = [ [8.3, 3.9], [-8.4, -3.4] ];
+let bubbleTimer = 0;
+function spawnBubble(x, z, big = false) {
+  if (bubbles.length > 45) return;
+  const m = new THREE.Mesh(bubbleGeo, bubbleMat);
+  const r = (big ? 0.16 : 0.05) + Math.random() * 0.06;
+  m.scale.setScalar(r);
+  m.position.set(x + (Math.random() - 0.5) * 0.3, TANK.sandTop + 0.2, z + (Math.random() - 0.5) * 0.3);
+  scene.add(m);
+  bubbles.push({ m, vy: 1.2 + Math.random() * 0.9, phase: Math.random() * 6.28 });
+}
+// ---------- Audio (WebAudio blips) ----------
+let actx = null;
+function ac() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function tone(freq, dur = 0.12, type = 'sine', vol = 0.14, when = 0, slideTo = 0) {
+  if (state.muted) return;
+  try {
+    const c = ac();
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, c.currentTime + when);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, c.currentTime + when + dur);
+    g.gain.setValueAtTime(vol, c.currentTime + when);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + when + dur + 0.03);
+    o.connect(g).connect(c.destination);
+    o.start(c.currentTime + when); o.stop(c.currentTime + when + dur + 0.05);
+  } catch (e) { /* audio unavailable */ }
+}
+const sfx = {
+  coin()  { tone(880, 0.06, 'square', 0.07); tone(1318, 0.1, 'square', 0.07, 0.06); },
+  eat()   { tone(330, 0.05, 'triangle', 0.1); tone(494, 0.06, 'triangle', 0.1, 0.05); },
+  hatch() { tone(523, 0.08, 'triangle', 0.12); tone(659, 0.08, 'triangle', 0.12, 0.08); tone(784, 0.14, 'triangle', 0.12, 0.16); },
+  stage() { tone(392, 0.09, 'triangle', 0.12); tone(523, 0.09, 'triangle', 0.12, 0.09); tone(659, 0.15, 'triangle', 0.12, 0.18); },
+  breed() { tone(262, 0.14, 'sine', 0.16); tone(330, 0.18, 'sine', 0.16, 0.14); },
+  deny()  { tone(180, 0.12, 'sawtooth', 0.06); },
+  poke()    { tone(240, 0.07, 'triangle', 0.09, 0, 480); }, // Ronde 11 — chirp naik pendek saat ikan kaget
+  love()    { tone(523, 0.12, 'sine', 0.12); tone(659, 0.12, 'sine', 0.12, 0.12); tone(784, 0.22, 'sine', 0.12, 0.24); }, // Ronde 12 — triad naik lembut saat bonding
+  chest: () => { tone(660, 0.08, 'triangle', 0.16); tone(880, 0.08, 'triangle', 0.16, 0.09); tone(1100, 0.12, 'triangle', 0.16, 0.18); },
+  treasureSpawn: () => { tone(784, 0.05, 'sine', 0.12); tone(988, 0.05, 'sine', 0.12, 0.06); tone(1318, 0.1, 'sine', 0.12, 0.12); },
+  senior: () => { tone(392, 0.1, 'sine', 0.12); tone(311, 0.18, 'sine', 0.12, 0.1); },
+  passAway: () => { tone(392, 0.15, 'sine', 0.14); tone(311, 0.2, 'sine', 0.14, 0.15); tone(233, 0.4, 'sine', 0.14, 0.35); },
+  slotSpin()  { tone(520, 0.05, 'square', 0.05); tone(460, 0.05, 'square', 0.05, 0.15); tone(420, 0.05, 'square', 0.05, 0.3); tone(460, 0.05, 'square', 0.05, 0.45); },
+  slotWin()   { tone(659, 0.08, 'triangle', 0.14); tone(880, 0.08, 'triangle', 0.14, 0.08); tone(1108, 0.18, 'triangle', 0.14, 0.16); },
+};
+
+// ---------- UI helpers ----------
+const $ = (id) => document.getElementById(id);
+const coinPill = $('coinPill'), timePill = $('timePill');
+coinPill.innerHTML = `${icon('coin')}<span id="coinVal">0</span>`;
+timePill.innerHTML = `${icon('clock')}<span id="clockTxt">--:--</span>`;
+const coinVal = $('coinVal'), clockTxt = $('clockTxt');
+let clockTimer = 0, clockText = '';
+function updateClock() {
+  const d = new Date();
+  const txt = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  if (txt !== clockText) { clockText = txt; clockTxt.textContent = txt; }
+}
+updateClock();
+function setCoins(v) {
+  state.coins = Math.max(0, v);
+  coinVal.textContent = state.coins;
+  coinPill.classList.remove('bump'); void coinPill.offsetWidth; coinPill.classList.add('bump');
+}
+function toast(msg) {
+  const d = document.createElement('div');
+  d.className = 'toast'; d.textContent = msg;
+  $('toasts').appendChild(d);
+  setTimeout(() => d.remove(), 2600);
+}
+function statusToast(f, text) {
+  const d = document.createElement('div');
+  d.className = 'toast status';
+  d.innerHTML = `${icon('fish', spHex(f.speciesIdx), '18px')}<span>${text}</span>`;
+  $('toasts').appendChild(d);
+  setTimeout(() => d.remove(), 2600);
+}
+function updateHint() {
+  const nFish = state.fish.length, nEggs = state.eggs.length;
+  const adults = state.fish.filter(f => f.stage === 2).length;
+  let msg;
+  if (!nFish && !nEggs) { const eggMin = Math.min(...SPECIES.map(s => s.eggPrice)), eggMax = Math.max(...SPECIES.map(s => s.eggPrice)); msg = `Open the Shop — buy feed (${COST_FEED}c each) & your first egg (${eggMin}–${eggMax} coins) — the egg hatches in ~${FAST_HATCH / 60} min.`; } // Ronde 10.5 — feed + harga & waktu dari konstanta
+  else if (nEggs && !nFish) msg = 'Eggs are hatching… earn coins from the treasure chest and by selling fish.'; // Ronde 16 — collect koin dihapus
+  else if (adults >= 2) msg = 'You have 2+ adults — breed them before they age (adults live ~24h).';
+  else if (nFish) msg = state.feedStock > 0 ? 'Tap Feed to drop flakes from your stock — fish chase and eat them to grow.' : 'Feed stock is empty — buy flakes in the Shop, then tap Feed.'; // Ronde 10.5 — feed dari stok inventory
+  else msg = 'Earn coins from the treasure chest — sell fish when the tank is crowded.'; // Ronde 16 — collect koin dihapus
+  $('hintMsg').textContent = msg;
+}
+function growthBar(f) {
+  if (f.stage === 0) return Math.min(100, (f.growth / 3) * 100);
+  if (f.stage === 1) return Math.min(100, ((f.growth - 3) / 4) * 100);
+  return 100;
+}
+// ---------- Inhabitants HUD: 3 levels (strip / expand modal / hidden) ----------
+let stripState = 'min'; // 'min' = strip visible; 'hidden' = strip gone (expand is a transient modal)
+let resOpen = false;
+const resWrap = $('resWrap'), resList = $('resList'), resSub = $('resSub');
+let lastResSig = '';
+const _preview = { renderer: null, scene: null, cam: null };
+function _previewRenderer() {
+  if (_preview.renderer) return _preview.renderer;
+  try {
+    _preview.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    _preview.renderer.setSize(236, 176);
+    _preview.renderer.setClearColor(0x000000, 0);
+    _preview.scene = new THREE.Scene();
+    _preview.cam = new THREE.PerspectiveCamera(32, 236 / 176, 0.1, 100);
+    _preview.scene.add(new THREE.HemisphereLight(0xbfd9ff, 0x1a2430, 1.1));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.5); dl.position.set(2, 3, 4);
+    _preview.scene.add(dl);
+    return _preview.renderer;
+  } catch (e) { return null; } // WebGL unavailable — modal shows rows without images
+}
+function fishSnapshot(f) {
+  const r = _previewRenderer();
+  if (!r) return '';
+  const g = makeFishModel(f.speciesIdx, f.traits);
+  try {
+    const box = new THREE.Box3().setFromObject(g);
+    const size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
+    const s = 2.1 / Math.max(size.x, size.y, size.z);
+    g.scale.setScalar(s);
+    g.position.sub(mid.clone().multiplyScalar(s));
+    g.rotation.y = 0.55; // three-quarter view
+    _preview.scene.add(g);
+    _preview.cam.position.set(0, 0.25, 4.6);
+    _preview.cam.lookAt(0, 0, 0);
+    r.render(_preview.scene, _preview.cam);
+    const url = r.domElement.toDataURL();
+    _preview.scene.remove(g);
+    g.traverse(o => { if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+    return url;
+  } catch (e) { _preview.scene.remove(g); return ''; }
+}
+function eggTint(speciesIdx) { // Ronde 10 — warna badan spesies di-mix 45% ke krem agar tetap terbaca sebagai telur
+  const base = speciesIdx == null ? new THREE.Color(0xfff3d0) : new THREE.Color(SPECIES[speciesIdx].colors.body);
+  return base.lerp(new THREE.Color(0xfff3d0), 0.45);
+}
+function eggSnapshot(speciesIdx = null) { // Ronde 10 — nest bertint per spesies; null = krem generik
+  const r = _previewRenderer();
+  if (!r) return '';
+  const g = new THREE.Group();
+  const nest = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.16, 6, 12), matFlat(0x7a5a33, 0.95));
+  nest.rotation.x = -Math.PI / 2;
+  g.add(nest);
+  const tint = eggTint(speciesIdx);
+  const eggMat = new THREE.MeshStandardMaterial({
+    color: tint, transparent: true, opacity: 0.85, roughness: 0.3,
+    emissive: tint.clone().multiplyScalar(0.5), emissiveIntensity: 0.35,
+  });
+  for (const [dx, dz] of [[0, 0], [0.28, 0.16], [-0.26, 0.18], [0.05, -0.28]]) {
+    const egg = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), eggMat);
+    egg.position.set(dx, 0.14, dz);
+    g.add(egg);
+  }
+  try {
+    _preview.scene.add(g);
+    _preview.cam.position.set(0, 2.4, 4.2);
+    _preview.cam.lookAt(0, 0, 0);
+    r.render(_preview.scene, _preview.cam);
+    const url = r.domElement.toDataURL();
+    _preview.scene.remove(g);
+    g.traverse(o => { if (o.material) o.material.dispose(); });
+    return url;
+  } catch (e) { _preview.scene.remove(g); return ''; }
+}
+let _feedThumb = null;
+function feedThumb() { // Ronde 10 — thumbnail 3D segenggam flake untuk baris Feed di shop
+  if (_feedThumb !== null) return _feedThumb;
+  const r = _previewRenderer();
+  if (!r) { _feedThumb = ''; return ''; }
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({ color: 0x9c6b3c, roughness: 0.8 }); // material baru — foodMat live tidak boleh ikut di-dispose
+  const offs = [[0, 0], [0.35, 0.2], [-0.3, 0.25], [0.12, -0.3], [-0.16, -0.18], [0.45, -0.28], [-0.48, 0.05], [0.05, 0.42]];
+  for (const [dx, dz] of offs) {
+    const m = new THREE.Mesh(foodGeo, mat);
+    m.position.set(dx, 0.18 + (dx * dx + dz * dz) * 0.35, dz);
+    m.rotation.set(dx * 2.4, dz * 3.1, dx * 1.3);
+    g.add(m);
+  }
+  try {
+    const box = new THREE.Box3().setFromObject(g);
+    const size = box.getSize(new THREE.Vector3()), mid = box.getCenter(new THREE.Vector3());
+    const s = 2.1 / Math.max(size.x, size.y, size.z);
+    g.scale.setScalar(s);
+    g.position.sub(mid.clone().multiplyScalar(s));
+    _preview.scene.add(g);
+    _preview.cam.position.set(0, 0.25, 4.6);
+    _preview.cam.lookAt(0, 0, 0);
+    r.render(_preview.scene, _preview.cam);
+    _feedThumb = r.domElement.toDataURL();
+    _preview.scene.remove(g);
+    mat.dispose();
+    return _feedThumb;
+  } catch (e) { _preview.scene.remove(g); mat.dispose(); _feedThumb = ''; return ''; }
+}
+const _fishThumb = {}; // Ronde 10.5 — thumbnail shop: aset ikan asli per spesies (cache, pola _eggThumb)
+function fishThumb(speciesIdx) {
+  return _fishThumb[speciesIdx] !== undefined ? _fishThumb[speciesIdx] : (_fishThumb[speciesIdx] = fishSnapshot({ speciesIdx, traits: defaultTraits(), variant: false }));
+}
+function resSig() {
+  const fs = state.fish.map(f => `${f.stage}|${Math.floor(f.growth * 10)}|${Math.floor(f.age / 30)}|${Math.round(f.hunger)}|${f.variant ? 1 : 0}`).join(',');
+  const es = state.eggs.map(e => `${Math.floor(e.h * 100)}`).join(',');
+  return fs + ';;' + es;
+}
+function renderResidents() {
+  if (!resOpen) return;
+  if (resSig() === lastResSig) return;
+  lastResSig = resSig();
+  resSub.textContent = `${state.fish.length} fish · ${state.eggs.length} eggs`;
+  resList.innerHTML = '';
+  for (const f of state.fish) {
+    const sp = SPECIES[f.speciesIdx];
+    const row = document.createElement('div');
+    row.className = 'resRow';
+    const img = fishSnapshot(f);
+    const isAdult = f.stage === 2;
+    const label = isAdult ? `Adult · ${ageH(f.age)}h / 24h` : `${STAGE[f.stage].name} · ${f.growth.toFixed(1)} pts`;
+    const bar1 = isAdult
+      ? `<div class="bar age"><i style="width:${Math.min(100, (f.age / ADULT_LIFESPAN) * 100).toFixed(0)}%"></i></div>`
+      : `<div class="bar"><i style="width:${growthBar(f).toFixed(0)}%"></i></div>`;
+    row.innerHTML = `
+      ${img ? `<img class="resImg" src="${img}" alt="${sp.name}">` : ''}
+      <div class="resInfo">
+        <div class="top"><b>${icon('fish', spHex(f.speciesIdx))} ${f.name}</b><span class="stage">${label}</span></div>
+        <div class="top"><span class="sp">${sp.name}</span>${f.variant ? `<span class="variant">${icon('sparkle')} variant</span>` : ''}</div>
+        ${bar1}
+        <div class="bar hunger"><i style="width:${(100 - f.hunger).toFixed(0)}%"></i></div>
+      </div>
+      <button type="button" class="sellBtn" data-sell="${f.id}">Sell ${sellPrice(f)} ${icon('coin')}</button>`; // Ronde 14 — jual ikan
+    resList.appendChild(row);
+  }
+  state.eggs.forEach((e, i) => {
+    const g = e.genome, sp = g ? SPECIES[g.species] : null;
+    const eggImg = eggThumb(g ? g.species : null); // Ronde 10 — thumbnail nest bertint per spesies
+    const row = document.createElement('div');
+    row.className = 'resRow';
+    row.innerHTML = `
+      ${eggImg ? `<img class="resImg" src="${eggImg}" alt="Nest ${i + 1}">` : ''}
+      <div class="resInfo">
+        <div class="top"><b>${icon('egg', '#ffd34f')} Nest ${i + 1}</b><span class="hatch">hatching ${Math.floor(e.h * 100)}%</span></div>
+        ${sp ? `<div class="top"><span class="sp">${sp.name}</span>${g.variant ? `<span class="variant">${icon('sparkle')} variant</span>` : ''}</div>` : ''}
+        <div class="bar"><i style="width:${(e.h * 100).toFixed(0)}%"></i></div>
+      </div>`;
+    resList.appendChild(row);
+  });
+}
+function openResidents() {
+  resOpen = true;
+  resWrap.classList.remove('hidden');
+  resWrap.querySelector('h3').innerHTML = `${icon('fish')} INHABITANTS`;
+  lastResSig = '';
+  renderResidents();
+}
+function closeResidents() {
+  resOpen = false;
+  resWrap.classList.add('hidden');
+  lastResSig = '';
+  renderStrip();
+}
+let stripSig = '';
+function renderStrip(force = false) {
+  const s = state.fish.length + '|' + state.eggs.length;
+  if (force || s !== stripSig) {
+    stripSig = s;
+    $('strip').classList.toggle('hidden', stripState === 'hidden');
+    $('btnShowStrip').classList.toggle('hidden', stripState !== 'hidden');
+    $('cntFish').innerHTML = `${icon('fish')} ${state.fish.length} fish`;
+    $('cntEggs').innerHTML = `${icon('egg')} ${state.eggs.length} eggs`;
+  }
+}
+function notifyResidents() { renderStrip(true); renderResidents(); }
+// Ronde 14 — jual ikan: delegation (tahan re-render resList)
+resList.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-sell]');
+  if (!b) return;
+  const f = state.fish.find(x => x.id === Number(b.dataset.sell));
+  if (!f) return;
+  const price = sellPrice(f);
+  askConfirm('SELL FISH', `Sell ${f.name} for ${price} coins? This cannot be undone.`, 'Sell', () => { sellFish(f); save(); }); // Ronde 15 — modal konfirmasi (dulu confirm() native)
+});
+resWrap.addEventListener('click', (e) => { if (e.target === resWrap) closeResidents(); });
+renderStrip();
+$('btnExpand').innerHTML = icon('list');
+$('btnHideStrip').innerHTML = icon('hide');
+$('btnShowStrip').innerHTML = icon('fish');
+$('btnExpand').onclick = () => { ac(); openResidents(); };
+$('btnHideStrip').onclick = () => { stripState = 'hidden'; renderStrip(true); };
+$('btnShowStrip').onclick = () => { stripState = 'min'; renderStrip(true); };
+$('btnResClose').onclick = () => { closeResidents(); };
+// floating world-space text
+function floatText(pos, text, color = '#ffd34f') {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+  const ctx = c.getContext('2d');
+  ctx.font = 'bold 52px "Segoe UI", sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.strokeText(text, 128, 48);
+  ctx.fillStyle = color; ctx.fillText(text, 128, 48);
+  const tex = new THREE.CanvasTexture(c);
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  spr.scale.set(3, 1.12, 1);
+  spr.position.copy(pos); spr.position.y += 0.8;
+  scene.add(spr);
+  state.floats.push({ spr, t: 0 });
+}
+
+// ---------- Fish species geometry (round 5 engine) ----------
+const _fishGeoCache = new Map(); // per-species shared geometry (body/tail/fins/eyes)
+const _eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
+const _pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2 });
+function _smoothProfile(profile) {
+  // t: 0 = snout, 1 = tail base. r: fraction of max half-height. Returns dense [t, r] samples.
+  const curve = new THREE.CatmullRomCurve3(profile.map(([t, r]) => new THREE.Vector3(t, r, 0)), false, 'catmullrom', 0.5);
+  return curve.getPoints(24);
+}
+function _finShapeGeometry(shape, depth) {
+  const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+  g.rotateY(Math.PI / 2); // shape x (backward) -> -Z; thin along body X
+  g.translate(-depth / 2, 0, 0);
+  return g;
+}
+function _sideFinGeometry(spec, fin, up) {
+  // Dorsal (up = +1) / anal (up = -1). Shape x = -world z; base at shape y=0 hidden inside the body.
+  const len = spec.body.len;
+  const zF = (0.5 - fin.t0) * len, zR = (0.5 - fin.t1) * len;
+  const sxF = -zF, sxR = -zR, span = sxR - sxF;
+  const s = new THREE.Shape();
+  s.moveTo(sxF, 0);
+  s.quadraticCurveTo(sxF + span * 0.15, up * fin.h * 0.85, sxF + span * 0.35, up * fin.h);
+  s.quadraticCurveTo(sxR - span * 0.08, up * fin.h * 0.55, sxR, 0);
+  s.closePath();
+  return _finShapeGeometry(s, 0.03);
+}
+function _pecGeometry(spec) {
+  // Teardrop pectoral fin: shape x = lateral (out from body), shape y = sweep back.
+  const { len: pl, splay } = spec.pec;
+  const s = new THREE.Shape();
+  s.moveTo(0, 0);
+  s.quadraticCurveTo(pl * 0.5, -pl * 0.15, pl, pl * 0.55 * splay);
+  s.quadraticCurveTo(pl * 0.4, pl * 0.2 * splay, 0, 0);
+  s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth: 0.02, bevelEnabled: false });
+  g.rotateX(-Math.PI / 2); // (x, y) -> (x, 0, -y): lateral X, backward -Z, thin in Y
+  g.translate(0, -0.01, 0);
+  return g;
+}
+
+function _speciesGeometry(spec) {
+  if (_fishGeoCache.has(spec.id)) return _fishGeoCache.get(spec.id);
+  const { len, h, x, profile } = spec.body;
+  const pts = _smoothProfile(profile);
+  const lathePts = pts.map(p => new THREE.Vector2(Math.max(0, p.y) * (h / 2), (1 - p.x) * len));
+  const bodyGeo = new THREE.LatheGeometry(lathePts, 20);
+  // Lathe points run top->bottom (head->tail); LatheGeometry winding then has normals pointing
+  // INWARD, so with FrontSide the outer wall is culled and the body renders as a mirrored,
+  // see-through inner shell. Flip the triangle winding and recompute normals (positions/UVs are
+  // untouched, so the verified UV convention u: belly/side/back, v: head/tail stays intact).
+  {
+    const bIdx = bodyGeo.getIndex();
+    for (let i = 0; i < bIdx.count; i += 3) { const t = bIdx.getX(i + 1); bIdx.setX(i + 1, bIdx.getX(i + 2)); bIdx.setX(i + 2, t); }
+    bodyGeo.computeVertexNormals();
+  }
+  bodyGeo.rotateX(Math.PI / 2); // axis Y -> Z: head (t=0) ends at +Z, tail at -Z
+  bodyGeo.translate(0, 0, -len / 2);
+  bodyGeo.scale(x, 1, 1); // lateral compression baked into the geometry
+  const radius = (t) => {
+    t = THREE.MathUtils.clamp(t, 0, 1);
+    let i = 0;
+    while (i < pts.length - 1 && pts[i + 1].x < t) i++;
+    const a = pts[i], b = pts[Math.min(i + 1, pts.length - 1)];
+    const f = b.x > a.x ? THREE.MathUtils.clamp((t - a.x) / (b.x - a.x), 0, 1) : 0;
+    return (a.y + (b.y - a.y) * f) * (h / 2);
+  };
+  const { fork, span, len: tl, flow } = spec.tail;
+  const hh = span / 2;
+  const ts = new THREE.Shape();
+  ts.moveTo(0, hh * 0.7);
+  ts.quadraticCurveTo(tl * (0.35 + flow * 0.25), hh * 1.05, tl * (1 - fork * 0.4), hh);
+  if (fork < 0.05) {
+    ts.quadraticCurveTo(tl + hh * 0.3, hh * 0.5, tl + hh * 0.12, 0);
+    ts.quadraticCurveTo(tl + hh * 0.3, -hh * 0.5, tl * (1 - fork * 0.4), -hh);
+  } else {
+    ts.quadraticCurveTo(tl * 0.95, hh * 0.45, tl - fork * tl * 0.5, hh * 0.15);
+    ts.lineTo(tl - fork * tl * 0.55, 0);
+    ts.lineTo(tl - fork * tl * 0.5, -hh * 0.15);
+    ts.quadraticCurveTo(tl * 0.95, -hh * 0.45, tl * (1 - fork * 0.4), -hh);
+  }
+  ts.quadraticCurveTo(tl * (0.35 + flow * 0.25), -hh * 1.05, 0, -hh * 0.7);
+  ts.closePath();
+  const geo = {
+    bodyGeo, radius,
+    tailGeo: _finShapeGeometry(ts, 0.035),
+    dorsalGeo: _sideFinGeometry(spec, spec.dorsal, 1),
+    analGeo: _sideFinGeometry(spec, spec.anal, -1),
+    pecGeo: _pecGeometry(spec),
+    eyeGeo: new THREE.SphereGeometry(spec.eye.r, 10, 8),
+    pupilGeo: new THREE.SphereGeometry(spec.eye.r * 0.55, 8, 6),
+  };
+  _fishGeoCache.set(spec.id, geo);
+  return geo;
+}
+function _shiftedColors(spec, hueShift) {
+  const body = new THREE.Color(spec.colors.body);
+  const fin = new THREE.Color(spec.colors.fin);
+  const norm = (h) => ((h % 360) + 360) % 360;
+  if (hueShift) {
+    body.offsetHSL(norm(hueShift) / 360, 0, 0);
+    fin.offsetHSL(norm(hueShift / 2) / 360, 0, 0);
+  }
+  return { body, fin };
+}
+function paintBody(spec, hueShift) {
+  // 256x128 canvas: x wraps belly->side->back->side->belly, y: 0 = tail, H = head (see UV convention above).
+  const W = 256, H = 128;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  const { body, fin } = _shiftedColors(spec, hueShift);
+  const belly = body.clone().offsetHSL(0, -0.06, 0.08);
+  const back = body.clone().offsetHSL(0, 0.04, -0.07);
+  const grad = ctx.createLinearGradient(0, 0, W, 0);
+  grad.addColorStop(0, '#' + belly.getHexString());
+  grad.addColorStop(0.25, '#' + body.getHexString());
+  grad.addColorStop(0.5, '#' + back.getHexString());
+  grad.addColorStop(0.75, '#' + body.getHexString());
+  grad.addColorStop(1, '#' + belly.getHexString());
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  spec.paint(ctx, W, H);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  return { tex, body, fin };
+}
+// ---------- Fish ----------
+const rayTargets = []; // meshes with userData.pick = {type, ref}
+function makeFishModel(speciesIdx, traits) {
+  const sp = SPECIES[speciesIdx];
+  const geo = _speciesGeometry(sp);
+  const painted = paintBody(sp, traits && traits.hue);
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ map: painted.tex, roughness: 0.55, metalness: 0.08 });
+  const finMat = new THREE.MeshStandardMaterial({
+    color: painted.fin, flatShading: true, roughness: 0.7, side: THREE.DoubleSide,
+    transparent: sp.colors.finAlpha < 1, opacity: sp.colors.finAlpha,
+  });
+  const body = new THREE.Mesh(geo.bodyGeo, bodyMat);
+  body.castShadow = true;
+  g.add(body);
+  const tailPivot = new THREE.Group();
+  tailPivot.position.set(0, 0, -sp.body.len / 2 + 0.05);
+  tailPivot.add(new THREE.Mesh(geo.tailGeo, finMat));
+  g.add(tailPivot);
+  g.add(new THREE.Mesh(geo.dorsalGeo, finMat));
+  g.add(new THREE.Mesh(geo.analGeo, finMat));
+  const pec = [];
+  const zP = (0.5 - sp.pec.t) * sp.body.len;
+  for (const s of [1, -1]) {
+    const pivot = new THREE.Group();
+    pivot.position.set(s * geo.radius(sp.pec.t) * sp.body.x, -0.05, zP);
+    const m = new THREE.Mesh(geo.pecGeo, finMat);
+    if (s < 0) m.scale.x = -1;
+    pivot.add(m);
+    g.add(pivot);
+    pec.push({ pivot, s });
+  }
+  const eye = sp.eye;
+  const zE = (0.5 - eye.t) * sp.body.len;
+  const xE = geo.radius(eye.t) * sp.body.x;
+  const eyeMat = _eyeWhiteMat.clone(), pupilMat = _pupilMat.clone(); // clones: death fade mutates per-fish opacity
+  for (const s of [1, -1]) {
+    const w = new THREE.Mesh(geo.eyeGeo, eyeMat);
+    w.position.set(s * xE, eye.y, zE);
+    g.add(w);
+    const p = new THREE.Mesh(geo.pupilGeo, pupilMat);
+    p.position.set(s * (xE + eye.r * 0.4), eye.y, zE + eye.r * 0.35);
+    g.add(p);
+  }
+  body.userData.pick = null; // set by caller with fish ref
+  g.userData = { tailPivot, bodyMat, body, finMat, pec, tailAnim: sp.tailAnim };
+  return g;
+}
+function stageFromGrowth(g) { const e = 1e-9; // Ronde 14 — epsilon FP: akumulasi 0.1 (40 flake × 0.1 = 6.9999…) harus tetap mencapai ambang
+  return g + e >= 7 ? 2 : g + e >= 3 ? 1 : 0; }
+function pickName() {
+  const used = new Set(state.fish.map(f => f.name));
+  const free = NAMES.filter(n => !used.has(n));
+  return free.length ? free[Math.floor(Math.random() * free.length)] : 'Fin#' + state.nextFishId;
+}
+// Ronde 8 — persistent hunger bubble: sprite child of the fish group, follows the fish
+function makeBubble() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 96;
+  const tex = new THREE.CanvasTexture(c);
+  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
+  spr.scale.set(2.0, 0.75, 1);
+  spr.visible = false;
+  spr.userData.state = 0; // 0 = hidden, 1 = hungry, 2 = starving
+  spr.userData.setText = (text, color) => {
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 256, 96);
+    ctx.font = 'bold 52px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 8; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.strokeText(text, 128, 48);
+    ctx.fillStyle = color; ctx.fillText(text, 128, 48);
+    tex.needsUpdate = true;
+  };
+  return spr;
+}
+function spawnFry(pos, speciesIdx, growth = 0, name = null, hunger = 60, age = 0, traits = null, variant = false) {
+  const sp = SPECIES[speciesIdx];
+  traits = Object.assign({ size: 1, speed: 1, hue: 0 }, traits || {});
+  const g = makeFishModel(speciesIdx, traits);
+  const stage = stageFromGrowth(growth);
+  age = stage === 2 ? Math.min(Math.max(0, age), ADULT_LIFESPAN - 1) : 0; // only adults age
+  const f = {
+    id: state.nextFishId++, group: g, speciesIdx, name: name || pickName(),
+    growth, stage, hunger, age, traits, variant,
+    senior: stage === 2 && age > SENIOR_FRAC * ADULT_LIFESPAN,
+    dying: false, dieT: 0, bubbleT: 0, starveT: 0, dieCause: 'age', // Ronde 14 — vonis kelaparan + cause kematian (runtime-only)
+    vel: new THREE.Vector3(), target: new THREE.Vector3().copy(FISH_MIN).lerp(FISH_MAX, Math.random()),
+    wander: 0, bobPhase: Math.random() * 6.28, scaleT: STAGE[stage].scale,
+    // Ronde 11 — behavior runtime-only (tidak di-save): mood, dash, flee, poke
+    mood: 'cruise', moodT: 0, dashPoint: new THREE.Vector3(),
+    fleeT: 0, fleePoint: new THREE.Vector3(), pokeCd: 0,
+  };
+  if (f.senior) tintSenior(f);
+  g.position.copy(pos);
+  const body = g.userData.body;
+  body.userData.pick = { type: 'fish', ref: f };
+  rayTargets.push(body);
+  scene.add(g);
+  const bub = makeBubble();
+  bub.position.set(0, sp.body.h / 2 + sp.dorsal.h + 0.15, 0); // above the dorsal fin
+  g.add(bub);
+  g.userData.bubble = bub;
+  state.fish.push(f);
+  return f;
+}
+function ageH(h) { return (h / 3600).toFixed(1); }
+function tintSenior(f) {
+  f.group.userData.bodyMat.color.lerp(new THREE.Color(0x888888), 0.45);
+}
+function stageUp(f) {
+  const newStage = stageFromGrowth(f.growth);
+  if (newStage === f.stage) return;
+  f.stage = newStage;
+  if (newStage === 2) statusToast(f, `${f.name} is now an Adult!`);
+  else statusToast(f, `${f.name} grew into a ${STAGE[1].name}!`);
+  sfx.stage();
+  floatText(f.group.position, newStage === 2 ? 'ADULT!' : 'LEVEL UP!', '#7dff9e');
+}
+const awayDeaths = []; // Ronde 14 — {name, cause} kematian selama run away; di-reset di awal tiap run, diisi killFish
+function startDying(f, cause) {
+  f.dying = true; f.dieT = 0;
+  f.dieCause = cause || 'age'; // Ronde 14 — 'starve' | 'age'
+  const ri = rayTargets.indexOf(f.group.userData.body);
+  if (ri >= 0) rayTargets.splice(ri, 1);
+  if (state.mating && (state.mating.first === f || state.mating.second === f)) state.mating = null; // Ronde 8 — a dying fish invalidates both picks
+  if (state.breeding && (state.breeding.a === f || state.breeding.b === f)) {
+    state.breeding = null;
+    toast(`${f.name} is too tired to keep breeding…`);
+  } else {
+    toast(`${f.name} is slowing down…`);
+  }
+}
+function killFish(f) {
+  const i = state.fish.indexOf(f);
+  if (i < 0) return;
+  state.fish.splice(i, 1);
+  scene.remove(f.group);
+  const starved = f.dieCause === 'starve'; // Ronde 14 — mati kelaparan: tanpa memorial coin (Ronde 16 — memorial coin dihapus total)
+  toast(starved ? `${f.name} passed away from starvation…` : `${f.name} passed away at a ripe old age…`); // Ronde 16 — tanpa koin jatuh
+  sfx.passAway();
+  awayDeaths.push({ name: f.name, cause: starved ? 'starve' : 'age' });
+  notifyResidents(); updateHint();
+}
+function sellPrice(f) { // Ronde 14 — harga jual = round(eggPrice × faktor tahap fry/juv/adult), variant ×2
+  return Math.round(SPECIES[f.speciesIdx].eggPrice * SELL_STAGE_FRAC[f.stage]) * (f.variant ? 2 : 1);
+}
+function sellFish(f) { // Ronde 14 — jual ikan dari modal Inhabitants
+  if (!f || f.dying) return null;
+  if (state.breeding && (state.breeding.a === f || state.breeding.b === f)) {
+    state.breeding = null;
+    toast(`${f.name} was removed from the breeding pair`);
+  }
+  if (state.mating && (state.mating.first === f || state.mating.second === f)) state.mating = null;
+  const price = sellPrice(f);
+  const i = state.fish.indexOf(f);
+  if (i < 0) return null;
+  state.fish.splice(i, 1);
+  const ri = rayTargets.indexOf(f.group.userData.body);
+  if (ri >= 0) rayTargets.splice(ri, 1);
+  const pos = f.group.position.clone();
+  scene.remove(f.group);
+  setCoins(state.coins + price);
+  floatText(pos, '+' + price);
+  sfx.coin();
+  toast(`${f.name} sold for ${price} coins`);
+  notifyResidents(); renderBreedHUD(); updateHint();
+  return price;
+}
+// Ronde 11 — target wander baru: 70% persisten mengikuti arah renang (S-curve/reversal alami),
+// 30% acak seragam — y selalu dari band kedalaman spesies. Juga menggulung mood berikutnya.
+function pickWander(f) {
+  const mv = SPECIES[f.speciesIdx].move;
+  const p = f.group.position;
+  if (f.vel.lengthSq() > 0.25 && Math.random() < 0.7) {
+    const dir = new THREE.Vector3().copy(f.vel).normalize();
+    f.target.copy(p).addScaledVector(dir, 3 + Math.random() * 4);
+    f.target.x += (Math.random() - 0.5) * 4;
+    f.target.z += (Math.random() - 0.5) * 4;
+  } else {
+    f.target.x = FISH_MIN.x + Math.random() * (FISH_MAX.x - FISH_MIN.x);
+    f.target.z = FISH_MIN.z + Math.random() * (FISH_MAX.z - FISH_MIN.z);
+  }
+  f.target.y = mv.depth[0] + Math.random() * (mv.depth[1] - mv.depth[0]); // Ronde 11 — y selalu dari band kedalaman spesies
+  f.target.clamp(FISH_MIN, FISH_MAX);
+  const r = Math.random();
+  if (r < mv.idle) { f.mood = 'bengong'; f.moodT = 3 + Math.random() * 5; } // Ronde 12 — bengong: diam memandangi, 3-8 s
+  else if (r < mv.idle + mv.hover) { f.mood = 'hover'; f.moodT = 1 + Math.random() * 2; }
+  else if (r < mv.idle + mv.hover + mv.dart) {
+    f.mood = 'dash'; f.moodT = 0.6;
+    f.dashPoint.copy(p).addScaledVector(new THREE.Vector3().subVectors(f.target, p).normalize(), 1.5 + Math.random() * 1.5);
+    f.dashPoint.clamp(FISH_MIN, FISH_MAX);
+  } else { f.mood = 'cruise'; }
+  f.wander = 4 + Math.random() * 7; // Ronde 12 — 4-11 s: tidak terlalu sering ganti target
+}
+// Ronde 11 — poke: ikan dash menjauh dari titik klik (diabaikan saat dying/breeding/cooldown)
+function pokeFish(f, hitPoint) {
+  if (f.dying || state.breeding || f.pokeCd > 0) return;
+  const dir = new THREE.Vector3().subVectors(f.group.position, hitPoint);
+  if (dir.lengthSq() < 0.001) dir.set(Math.random() - 0.5, 0, Math.random() - 0.5);
+  dir.normalize();
+  f.fleePoint.copy(f.group.position).addScaledVector(dir, FLEE_DIST);
+  f.fleePoint.x += (Math.random() - 0.5) * 3;
+  f.fleePoint.z += (Math.random() - 0.5) * 3;
+  f.fleePoint.y = THREE.MathUtils.clamp(f.fleePoint.y, FISH_MIN.y + 0.5, FISH_MAX.y - 0.5);
+  f.fleePoint.clamp(FISH_MIN, FISH_MAX);
+  f.fleeT = FLEE_TIME;
+  f.pokeCd = POKE_CD;
+  sfx.poke();
+}
+
+const _look = new THREE.Object3D();
+function updateFish(f, dt, t) {
+  const st = STAGE[f.stage];
+  f.scaleT = st.scale * SPECIES[f.speciesIdx].size * f.traits.size;
+  f.group.scale.lerp(new THREE.Vector3(f.scaleT, f.scaleT, f.scaleT), Math.min(1, dt * 3));
+
+  // death animation: slow down, sink to the sand, fade out
+  if (f.dying) {
+    f.dieT += dt;
+    f.vel.multiplyScalar(Math.max(0, 1 - 2 * dt));
+    f.group.position.addScaledVector(f.vel, dt);
+    f.group.position.y = Math.max(TANK.sandTop + 0.2, f.group.position.y - 1.5 * dt);
+    if (Math.random() < dt * 8) spawnBubble(f.group.position.x, f.group.position.z, true);
+    f.group.userData.tailPivot.rotation.y = Math.sin(t * 2 + f.bobPhase) * 0.2;
+    f.group.traverse(o => { if (o.material) { o.material.transparent = true; o.material.opacity = Math.max(0, 1 - f.dieT / DIE_DURATION); } });
+    if (f.dieT >= DIE_DURATION) killFish(f);
+    return;
+  }
+
+  // hunger builds up over time (fry get hungrier faster, adults slower)
+  const stageMod = f.stage === 0 ? 1.15 : f.stage === 2 ? 0.9 : 1;
+  f.hunger = Math.min(100, f.hunger + HUNGER_DECAY * stageMod * dt);
+  // Ronde 8 — hunger bubble di atas kepala: tampil 5 s, cooldown 5 s, berulang selama masih lapar
+  const bub = f.group.userData.bubble;
+  const bstate = f.hunger >= STARVE_TOAST ? 2 : f.hunger >= HUNGER_ALERT ? 1 : 0;
+  if (bstate === 0) {
+    if (bub.userData.state) { bub.userData.state = 0; bub.visible = false; f.bubbleT = 0; }
+  } else if (bstate !== bub.userData.state) {
+    bub.userData.state = bstate;
+    bub.userData.setText(bstate === 2 ? 'STARVING!' : 'HUNGRY!', bstate === 2 ? '#ff6a4d' : '#ffd34f');
+    bub.visible = true;
+    f.bubbleT = t + BUBBLE_ON; // baru jadi lapar/starving: tampil dulu, lalu cooldown
+  } else if (t >= f.bubbleT) {
+    bub.visible = !bub.visible;
+    f.bubbleT = t + (bub.visible ? BUBBLE_ON : BUBBLE_COOLDOWN);
+  }
+
+  // Ronde 14 — growth pasif dihapus; vonis kelaparan: saat bar hunger penuh (100) starveT berjalan,
+  // makan satu flake me-reset (lihat eatFood). Fry/juv 3 jam, adult 5 jam (STARVE_KILL).
+  if (f.hunger >= 100) {
+    f.starveT += dt;
+    if (f.starveT >= STARVE_KILL[f.stage]) { startDying(f, 'starve'); return; }
+  }
+
+  // adults age; past SENIOR_FRAC they slow and gray out; at LIFESPAN they pass away
+  if (f.stage === 2) {
+    f.age += dt;
+    if (!f.senior && f.age > SENIOR_FRAC * ADULT_LIFESPAN) {
+      f.senior = true;
+      tintSenior(f);
+      toast(`${f.name} is getting old…`);
+      sfx.senior();
+    }
+    if (f.age >= ADULT_LIFESPAN) { startDying(f); return; }
+  }
+
+  // Ronde 11 — timers behavior (runtime-only)
+  f.fleeT = Math.max(0, f.fleeT - dt);
+  f.pokeCd = Math.max(0, f.pokeCd - dt);
+
+  // food seeking (only hungry fish go after food — full fish leave it for others)
+  let nearest = null, nd = 1e9;
+  for (const fl of state.foods) {
+    const d = f.group.position.distanceTo(fl.m.position);
+    if (d < nd) { nd = d; nearest = fl; }
+  }
+  const foodChase = !!(nearest && nd < 8 && f.hunger >= CHASE_HUNGER);
+  const inBreeding = state.breeding && (state.breeding.a === f || state.breeding.b === f);
+  const mv = SPECIES[f.speciesIdx].move;
+
+  // Ronde 11 — mood machine (cruise/dash/hover) + target wander baru (persisten, band kedalaman)
+  if (f.mood !== 'cruise') {
+    f.moodT -= dt;
+    if (f.moodT <= 0) { f.mood = 'cruise'; f.wander = 0; }
+  }
+  f.wander -= dt;
+  if (f.wander <= 0 && f.fleeT <= 0 && !inBreeding && !foodChase) pickWander(f);
+
+  // prioritas target (yang tinggi menang): poke/flee > breeding > food > mood
+  let target = null, spMul = 1, turnMul = 1;
+  if (f.fleeT > 0) { target = f.fleePoint; spMul = FLEE_SPEED; turnMul = 1.5; }
+  else if (inBreeding) target = state.breeding.mid;
+  else if (foodChase) target = nearest.m.position;
+  else if (f.mood === 'hover') target = null; // diam di tempat — kepak pectoral di bawah tetap jalan
+  else if (f.mood === 'bengong') target = null; // Ronde 12 — bengong: diam total, hanya ekor & fin kepak + body bob
+  else if (f.mood === 'dash') { target = f.dashPoint; spMul = 1.7; }
+  else target = f.target;
+
+  const p = f.group.position;
+  const desired = target ? new THREE.Vector3().subVectors(target, p).normalize()
+    .multiplyScalar(st.speed * SPECIES[f.speciesIdx].speed * f.traits.speed * (f.hunger >= 95 ? STARVE_SPEED : 1) * (f.senior ? SENIOR_SPEED : 1) * spMul)
+    : new THREE.Vector3();
+
+  // Ronde 11 — social (hanya saat cruise): + = tarikan lemah ke tetangga sespesies; − = teritorial (jauhi)
+  if (!f.fleeT && !inBreeding && !foodChase && f.mood === 'cruise' && mv.social) {
+    let nb = null, bd = Infinity;
+    for (const o of state.fish) {
+      if (o === f || o.dying || o.speciesIdx !== f.speciesIdx) continue;
+      const d = p.distanceToSquared(o.group.position);
+      if (d < bd) { bd = d; nb = o; }
+    }
+    if (nb) {
+      const range = mv.social > 0 ? 4 : 2.5;
+      if (bd < range * range) {
+        const to = new THREE.Vector3().subVectors(nb.group.position, p).normalize();
+        if (mv.social > 0) desired.lerp(to.multiplyScalar(desired.length()), 0.35 * mv.social);
+        else desired.addScaledVector(to, -mv.social * 1.5);
+      }
+    }
+  }
+
+  // Ronde 11 — turn rate per spesies (ikan besar belok lambat)
+  f.vel.lerp(desired, Math.min(1, dt * 1.6 * mv.turn * turnMul));
+  if (f.mood === 'bengong') f.vel.multiplyScalar(Math.max(0, 1 - 5 * dt)); // Ronde 12 — decelerasi cepat agar benar-benar berhenti
+
+  // Ronde 11 — separation: gaya tolak lembut agar tubuh tidak tumpang tindih.
+  // Pasangan breeding dikecualikan — keduanya di-override ke titik mid yang sama.
+  {
+    const rF = SPECIES[f.speciesIdx].body.len * f.scaleT * 0.5;
+    for (const o of state.fish) {
+      if (o === f || o.dying) continue;
+      if (inBreeding && o === (state.breeding.a === f ? state.breeding.b : state.breeding.a)) continue;
+      const rO = SPECIES[o.speciesIdx].body.len * o.scaleT * 0.5;
+      const minD = rF + rO;
+      const dd = p.distanceTo(o.group.position);
+      if (dd >= minD || dd < 1e-4) continue;
+      const away = new THREE.Vector3().subVectors(p, o.group.position).normalize();
+      f.vel.addScaledVector(away, SEP_K * (1 - dd / minD) * dt);
+      if (dd < minD * 0.5) p.addScaledVector(away, (minD * 0.5 - dd) * 0.5);
+    }
+  }
+
+  f.group.position.addScaledVector(f.vel, dt);
+
+  // soft wall containment
+  const m = 0.7;
+  if (p.x < FISH_MIN.x + m) f.vel.x += (FISH_MIN.x + m - p.x) * 3 * dt;
+  if (p.x > FISH_MAX.x - m) f.vel.x -= (p.x - FISH_MAX.x + m) * 3 * dt;
+  if (p.y < FISH_MIN.y + m) f.vel.y += (FISH_MIN.y + m - p.y) * 3 * dt;
+  if (p.y > FISH_MAX.y - m) f.vel.y -= (p.y - FISH_MAX.y + m) * 3 * dt;
+  if (p.z < FISH_MIN.z + m) f.vel.z += (FISH_MIN.z + m - p.z) * 3 * dt;
+  if (p.z > FISH_MAX.z - m) f.vel.z -= (p.z - FISH_MAX.z + m) * 3 * dt;
+  p.clamp(FISH_MIN, FISH_MAX);
+
+  // eating
+  if (nearest && nd < 1.45 && f.hunger >= EAT_MIN_HUNGER) eatFood(f, nearest);
+
+  // face direction of travel
+  const spd = f.vel.length();
+  if (spd > 0.3) {
+    _look.position.copy(p);
+    _look.lookAt(p.clone().add(f.vel));
+    f.group.quaternion.slerp(_look.quaternion, Math.min(1, dt * 5));
+  }
+  p.y += Math.sin(t * 2 + f.bobPhase) * 0.02;
+
+  // tail beat + fins (per-species amplitude/frequency; pectorals flap with a phase offset)
+  const u = f.group.userData;
+  const beat = t * (4 + spd * 2.5) * u.tailAnim.freq + f.bobPhase;
+  u.tailPivot.rotation.y = Math.sin(beat) * u.tailAnim.amp;
+  u.tailPivot.rotation.x = Math.sin(beat) * u.tailAnim.amp * 0.3;
+  for (const pr of u.pec) {
+    pr.pivot.rotation.z = -0.5 + Math.sin(t * 7 + f.bobPhase) * 0.35;
+    pr.pivot.rotation.x = Math.sin(t * 7 + f.bobPhase + 1) * 0.15;
+  }
+
+  // Ronde 12 — glow hanya saat bonding: pink dengan pulse heartbeat (bagian love scene)
+  const glow = inBreeding;
+  u.bodyMat.emissive.setHex(glow ? 0x993355 : 0x000000);
+  u.bodyMat.emissiveIntensity = glow ? 0.55 + Math.pow(Math.max(0, Math.sin(t * 5.7)), 3) * 0.9 : 1;
+}
+function eatFood(f, fl) {
+  const nourished = f.hunger >= GROW_MIN_HUNGER;
+  state.foods.splice(state.foods.indexOf(fl), 1);
+  scene.remove(fl.m);
+  f.hunger = Math.max(0, f.hunger - HUNGER_EAT);
+  f.starveT = 0; // Ronde 14 — makan me-reset vonis kelaparan
+  if (nourished) f.growth += GROW_GAIN[f.stage];
+  if (stageFromGrowth(f.growth) !== f.stage) stageUp(f);
+  else sfx.eat();
+  for (let i = 0; i < 4; i++) spawnBubble(f.group.position.x, f.group.position.z, true);
+  notifyResidents(); updateHint();
+}
+
+// ---------- Eggs (growth system start) ----------
+function eggPos() {
+  for (let i = 0; i < 12; i++) {
+    const v = new THREE.Vector3(-8 + Math.random() * 16, 0, -4.5 + Math.random() * 9);
+    let ok = true;
+    for (const e of state.eggs) if (e.group.position.distanceTo(v) < 3) ok = false;
+    if (ok) return v;
+  }
+  return new THREE.Vector3((Math.random() - 0.5) * 10, 0, (Math.random() - 0.5) * 6);
+}
+function makeEgg(pos, h = 0, genome = null) {
+  const g = new THREE.Group();
+  const nest = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.16, 6, 12), matFlat(0x7a5a33, 0.95));
+  nest.rotation.x = -Math.PI / 2;
+  nest.position.y = 0.05;
+  g.add(nest);
+  const tint = eggTint(genome ? genome.species : null); // Ronde 10 — telur bertint per spesies
+  const eggMat = new THREE.MeshStandardMaterial({
+    color: tint, transparent: true, opacity: 0.85, roughness: 0.3,
+    emissive: tint.clone().multiplyScalar(0.5), emissiveIntensity: 0.35,
+  });
+  for (const [dx, dz] of [[0, 0], [0.28, 0.16], [-0.26, 0.18], [0.05, -0.28]]) {
+    const egg = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), eggMat);
+    egg.position.set(dx, 0.14, dz);
+    g.add(egg);
+  }
+  g.position.set(pos.x, TANK.sandTop, pos.z);
+  scene.add(g);
+  if (h === 0 && state.fish.length === 0) h = 1 - FAST_HATCH / HATCH_TIME; // Ronde 10 — telur pertama di tank kosong menetas ±2 menit
+  const e = { group: g, h, genome };
+  state.eggs.push(e);
+  return e;
+}
+function updateEggs(dt, t) {
+  for (let i = state.eggs.length - 1; i >= 0; i--) {
+    const e = state.eggs[i];
+    e.h += dt / HATCH_TIME;
+    e.group.rotation.z = Math.sin(t * 3 + i) * 0.06;
+    const s = 1 + Math.sin(t * 4) * 0.03;
+    e.group.scale.set(s, s, s);
+    if (e.h >= 1) hatchEgg(i);
+  }
+}
+function hatchEgg(i) {
+  const e = state.eggs[i];
+  state.eggs.splice(i, 1);
+  scene.remove(e.group);
+  const g = e.genome || { species: Math.floor(Math.random() * SPECIES.length), traits: defaultTraits(), variant: false };
+  const pos = e.group.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+  pos.x = THREE.MathUtils.clamp(pos.x, FISH_MIN.x, FISH_MAX.x);
+  pos.z = THREE.MathUtils.clamp(pos.z, FISH_MIN.z, FISH_MAX.z);
+  const f = spawnFry(pos, g.species, 0, null, 60, 0, g.traits, g.variant);
+  for (let j = 0; j < 8; j++) spawnBubble(pos.x, pos.z, true);
+  toast(g.variant ? `Rare variant ${SPECIES[g.species].name} hatched — say hi to ${f.name}!` : `${SPECIES[g.species].name} fry hatched — say hi to ${f.name}!`);
+  sfx.hatch();
+  notifyResidents(); updateHint();
+}
+function buyEgg(speciesIdx) { // Ronde 10 — telur per spesies, harga dari SPECIES.eggPrice
+  const sp = SPECIES[speciesIdx];
+  if (state.coins < sp.eggPrice) { sfx.deny(); toast(`Need ${sp.eggPrice} coins for a ${sp.name} egg`); return; }
+  setCoins(state.coins - sp.eggPrice);
+  makeEgg(eggPos(), 0, { species: speciesIdx, traits: defaultTraits(), variant: false });
+  toast(`${sp.name} egg bought — it will hatch on its own.`);
+  notifyResidents(); updateHint();
+}
+// ---------- Food (feeding system) ----------
+const foodGeo = new THREE.DodecahedronGeometry(0.09, 0);
+const foodMat = matFlat(0x9c6b3c, 0.9);
+let feedQty = 1; // Ronde 10.5 — jumlah porsi beli di shop (runtime UI setting, not saved); 1 klik Feed = 1 porsi dari state.feedStock
+function dropFlakes(clumps = 1) {
+  for (let k = 0; k < clumps; k++) {
+    const cx = (Math.random() - 0.5) * 8, cz = (Math.random() - 0.5) * 4;
+    for (let i = 0; i < FLAKES_PER_PORSION; i++) { // Ronde 14 — 10 flakes per porsi
+      const m = new THREE.Mesh(foodGeo, foodMat);
+      m.position.set(cx + (Math.random() - 0.5) * 2.4, TANK.waterTop - 0.3, cz + (Math.random() - 0.5) * 2);
+      m.castShadow = true;
+      scene.add(m);
+      state.foods.push({ m, vy: 0.9 + Math.random() * 0.5, phase: Math.random() * 6.28, life: 25, settled: false });
+    }
+  }
+  tone(600, 0.05, 'triangle', 0.08);
+  updateHint();
+}
+function feed() { // Ronde 10.5 — 1 klik = 1 porsi dari stok inventory (tanpa biaya koin)
+  if (state.feedStock <= 0) { sfx.deny(); toast('No feed in stock — buy some in the Shop'); return; }
+  state.feedStock--;
+  dropFlakes(1);
+  toast(state.feedStock === 0 ? 'Flakes dropped — that was the last portion. Restock in the Shop!' : 'Flakes dropped — the school is interested!');
+}
+function buyFeed() { // Ronde 10.5 — beli flake di shop: koin → stok inventory
+  const cost = feedQty * COST_FEED;
+  if (state.coins < cost) { sfx.deny(); toast(`Need ${cost} coins to buy ${feedQty} portions`); return; }
+  setCoins(state.coins - cost);
+  state.feedStock += feedQty;
+  toast(`Bought ${feedQty} portion${feedQty > 1 ? 's' : ''} of flakes — ${state.feedStock} in stock.`);
+  feedLabel();
+}
+function updateFoods(dt, t) {
+  for (let i = state.foods.length - 1; i >= 0; i--) {
+    const f = state.foods[i];
+    f.life -= dt;
+    if (!f.settled) {
+      f.m.position.y -= f.vy * dt;
+      f.m.position.x += Math.sin(t * 2 + f.phase) * 0.02;
+      f.m.position.z += Math.cos(t * 1.7 + f.phase) * 0.02;
+      if (f.m.position.y <= TANK.sandTop + 0.12) { f.m.position.y = TANK.sandTop + 0.12; f.settled = true; }
+    }
+    f.m.rotation.x += dt; f.m.rotation.y += dt * 0.7;
+    if (f.life <= 0) { scene.remove(f.m); state.foods.splice(i, 1); }
+    else if (f.life < 3) f.m.scale.setScalar(Math.max(0.01, f.life / 3));
+  }
+}
+
+// ---------- Genetics (round 5 P1) ----------
+const TRAIT_RANGE = { size: [0.8, 1.2], speed: [0.8, 1.2], hue: [-20, 20] };
+const TRAIT_JITTER = { size: 0.06, speed: 0.06, hue: 8 };
+function defaultTraits() { return { size: 1, speed: 1, hue: 0 }; }
+function gauss() { // Box-Muller
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+function breedGenome(a, b) {
+  // a/b: fish objects with {speciesIdx, traits}
+  const cross = a.speciesIdx !== b.speciesIdx;
+  const sp = cross ? (Math.random() < 0.5 ? a : b).speciesIdx : a.speciesIdx;
+  const variant = cross && Math.random() < 0.10;
+  const avg = k => THREE.MathUtils.clamp((a.traits[k] + b.traits[k]) / 2 + gauss() * TRAIT_JITTER[k], TRAIT_RANGE[k][0], TRAIT_RANGE[k][1]);
+  const traits = { size: avg('size'), speed: avg('speed'), hue: avg('hue') };
+  if (variant) traits.hue = THREE.MathUtils.clamp(traits.hue + (Math.random() < 0.5 ? -1 : 1) * (25 + Math.random() * 20), -45, 45);
+  return { species: sp, traits, variant };
+}
+// ---------- Breeding system ----------
+function canBreed() {
+  const adults = state.fish.filter(f => f.stage === 2 && !f.dying);
+  return { adults, ready: adults.length >= 2 && state.breedCd <= 0 && !state.breeding };
+}
+// Ronde 12 — love scene: hati, sparkles, cahaya pink, glow heartbeat (tampil selama bonding)
+const heartTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.translate(64, 60);
+  ctx.shadowColor = 'rgba(255, 100, 140, 0.9)'; ctx.shadowBlur = 16;
+  const g = ctx.createRadialGradient(0, -8, 4, 0, 0, 50);
+  g.addColorStop(0, '#ffdbe4'); g.addColorStop(0.5, '#ff6b8d'); g.addColorStop(1, '#d62f5c');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(0, 34);
+  ctx.bezierCurveTo(-46, 8, -50, -28, -24, -30);
+  ctx.bezierCurveTo(-10, -31, 0, -20, 0, -12);
+  ctx.bezierCurveTo(0, -20, 10, -31, 24, -30);
+  ctx.bezierCurveTo(50, -28, 46, 8, 0, 34);
+  ctx.fill();
+  return new THREE.CanvasTexture(c);
+})();
+const sparkleTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const ctx = c.getContext('2d');
+  ctx.translate(32, 32);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.shadowColor = '#ffd34f'; ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(0, -24); ctx.quadraticCurveTo(3, -3, 24, 0);
+  ctx.quadraticCurveTo(3, 3, 0, 24);
+  ctx.quadraticCurveTo(-3, 3, -24, 0);
+  ctx.quadraticCurveTo(-3, -3, 0, -24);
+  ctx.closePath(); ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, Math.PI * 2); ctx.fill();
+  return new THREE.CanvasTexture(c);
+})();
+const loveFX = new THREE.Group(); loveFX.visible = false; scene.add(loveFX);
+const loveLight = new THREE.PointLight(0xff5577, 12, 9, 2); // Ronde 12 — cahaya pink pulse heartbeat (unit light fisik, pola `fill`)
+loveFX.add(loveLight);
+const loveGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xff5577, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }));
+loveGlow.scale.set(4.5, 4.5, 1); loveGlow.renderOrder = 3; loveFX.add(loveGlow);
+const loveSparks = [];
+for (let i = 0; i < 8; i++) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkleTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
+  s.userData = { a: (i / 8) * Math.PI * 2, r: 1.3 + Math.random() * 1.3, y: (Math.random() - 0.5) * 2, ph: Math.random() * 6.28 };
+  loveFX.add(s); loveSparks.push(s);
+}
+const loveHearts = [];
+let loveHeartTimer = 0;
+function spawnLoveHeart(pos) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: heartTex, transparent: true, opacity: 0, depthWrite: false, depthTest: false }));
+  const sc = 0.18 + Math.random() * 0.16;
+  s.scale.set(sc, sc, 1);
+  s.position.set(pos.x + (Math.random() - 0.5) * 1.2, pos.y + (Math.random() - 0.5) * 0.6, pos.z + (Math.random() - 0.5) * 1.2);
+  scene.add(s);
+  loveHearts.push({ s, life: 2.5, vy: 0.5 + Math.random() * 0.4, ph: Math.random() * 6.28, sc });
+}
+function startBreeding(a, b) {
+  const mid = a.group.position.clone().lerp(b.group.position, 0.5);
+  mid.x = THREE.MathUtils.clamp(mid.x, FISH_MIN.x, FISH_MAX.x);
+  mid.y = THREE.MathUtils.clamp(mid.y, FISH_MIN.y + 1, FISH_MAX.y - 1);
+  mid.z = THREE.MathUtils.clamp(mid.z, FISH_MIN.z, FISH_MAX.z);
+  state.breeding = { a, b, t: 0, dur: BREED_TIME, mid };
+  const sa = SPECIES[a.speciesIdx], sb = SPECIES[b.speciesIdx];
+  toast(a.speciesIdx === b.speciesIdx
+    ? `Purebred ${sa.name} — ${a.name} and ${b.name} are breeding…`
+    : `${sa.name} × ${sb.name} — crossing! (10% mutant) ${a.name} & ${b.name}…`);
+  sfx.love(); // Ronde 12 — chime lembut saat bonding mulai
+}
+let breedHudSig = '';
+function eggRange(a, b) { // Ronde 8 — predicted egg count, shared by confirm view and updateBreeding
+  const [pa, pb] = [SPECIES[a.speciesIdx].eggs, SPECIES[b.speciesIdx].eggs];
+  return [Math.round((pa[0] + pb[0]) / 2), Math.round((pa[1] + pb[1]) / 2)];
+}
+function renderBreedHUD(force = false) {
+  const wrap = $('breedWrap');
+  if (!state.mating) { wrap.classList.add('hidden'); breedHudSig = ''; return; }
+  wrap.classList.remove('hidden');
+  const h3 = wrap.querySelector('h3');
+  if (state.mating.confirming) {
+    const a = state.mating.first, b = state.mating.second;
+    if (!a || !b) { state.mating = { first: a || null }; state.mating.confirming = false; renderBreedHUD(true); return; }
+    h3.innerHTML = `${icon('heart', '#ffd34f')} CONFIRM PAIRING`;
+    const [lo, hi] = eggRange(a, b);
+    $('breedSub').textContent = a.speciesIdx === b.speciesIdx
+      ? `Purebred ${SPECIES[a.speciesIdx].name} — expect ${lo}–${hi} eggs.`
+      : `${SPECIES[a.speciesIdx].name} × ${SPECIES[b.speciesIdx].name} — hybrid (10% variant) — expect ${lo}–${hi} eggs.`;
+    const card = f => `<div class="pairCard">${icon('fish', spHex(f.speciesIdx), '22px')}<span>${f.name}</span><small>${SPECIES[f.speciesIdx].name}${f.variant ? ' · variant' : ''} · ${icon('hourglass')} ${ageH(f.age)}h / 24h</small></div>`;
+    $('breedList').innerHTML = `<div class="pairRow">${card(a)}<div class="pairX">×</div>${card(b)}</div>`;
+    $('btnBreedGo').innerHTML = `${icon('heart', '#ffd34f')} Breed · ${COST_BREED}c`; // Ronde 16 — biaya breeding di tombol commit
+    $('breedActions').classList.add('on');
+    breedHudSig = 'confirm|' + a.id + '|' + b.id;
+    return;
+  }
+  h3.innerHTML = `${icon('heart', '#ffd34f')} CHOOSE A PAIR`; // Ronde 12 — pemilihan kembali di list modal
+  const { adults } = canBreed();
+  const sig = (state.mating.first ? state.mating.first.id : -1) + '|' + adults.map(f => f.id + ':' + Math.floor(f.age / 60)).join(',');
+  if (!force && sig === breedHudSig) return;
+  breedHudSig = sig;
+  const listEl = $('breedList');
+  listEl.innerHTML = '';
+  for (const f of adults) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'breedPick' + (state.mating.first === f ? ' pick' : '');
+    b.innerHTML = `${icon('fish', spHex(f.speciesIdx))} <b>${f.name}</b><span>${SPECIES[f.speciesIdx].name}${f.variant ? ' · variant' : ''} · ${icon('hourglass')} ${ageH(f.age)}h / 24h</span>`;
+    b.onclick = () => { ac(); handleBreedPick(f); };
+    listEl.appendChild(b);
+  }
+  $('breedActions').classList.remove('on');
+}
+function confirmBreed() { // Ronde 8 — re-validate the pair, then start breeding
+  const m = state.mating;
+  if (!m || !m.confirming) return;
+  const a = m.first, b = m.second;
+  const ok = f => state.fish.includes(f) && !f.dying && f.stage === 2;
+  if (ok(a) && ok(b)) {
+    if (state.coins < COST_BREED) { sfx.deny(); toast(`Need ${COST_BREED} coins to breed`); renderBreedHUD(true); return; } // Ronde 16 — cek ulang di titik commit
+    setCoins(state.coins - COST_BREED); // Ronde 16 — breeding 200 koin, dibayar sebelum bonding
+    startBreeding(a, b);
+    cancelMating(true);
+    return;
+  }
+  if (!ok(a)) { state.mating = {}; toast(`${a.name} can't breed right now`); renderBreedHUD(true); return; }
+  state.mating.confirming = false; state.mating.second = null;
+  toast(`${b.name} can't breed right now — pick a partner`);
+  renderBreedHUD(true);
+}
+function cancelMating(silent = false) {
+  state.mating = null;
+  renderBreedHUD(true);
+  if (!silent) toast('Selection cancelled');
+}
+function handleBreedPick(f) {
+  if (state.mating.confirming) return;
+  if (state.mating.first === f) { state.mating = {}; toast(`${f.name} deselected`); renderBreedHUD(true); return; }
+  if (state.mating.first) {
+    // Ronde 8 — second pick opens the confirm view instead of starting breeding
+    state.mating.second = f;
+    state.mating.confirming = true;
+    renderBreedHUD(true);
+    return;
+  }
+  state.mating.first = f;
+  toast(`${f.name} selected — pick a partner`);
+  renderBreedHUD(true);
+}
+function updateBreeding(dt) {
+  if (state.breedCd > 0) state.breedCd = Math.max(0, state.breedCd - dt);
+  const br = state.breeding;
+  if (br) {
+    br.t += dt;
+    // Ronde 12 — love scene: hati + sparkles + cahaya pink mengikuti pasangan
+    loveFX.visible = true; loveFX.position.copy(br.mid);
+    loveHeartTimer += dt;
+    while (loveHeartTimer >= HEART_EVERY) { loveHeartTimer -= HEART_EVERY; spawnLoveHeart(br.mid); }
+    const beat = Math.pow(Math.max(0, Math.sin(br.t * 5.7)), 3);
+    loveLight.intensity = 6 + beat * 10;
+    loveGlow.material.opacity = 0.18 + beat * 0.3;
+    for (const s of loveSparks) {
+      const u = s.userData;
+      s.position.set(Math.cos(u.a) * u.r, u.y + Math.sin(br.t * 2 + u.ph) * 0.2, Math.sin(u.a) * u.r);
+      const tw = 0.35 + 0.65 * Math.abs(Math.sin(br.t * 2.5 + u.ph));
+      s.material.opacity = tw;
+      const ss = 0.14 + tw * 0.14;
+      s.scale.set(ss, ss, 1);
+    }
+    if (br.t >= br.dur) {
+      const [lo, hi] = eggRange(br.a, br.b); // Ronde 8 — shared with the confirm view
+      const n = lo + Math.floor(Math.random() * (hi - lo + 1));
+      for (let i = 0; i < n; i++) {
+        const p = br.mid.clone().add(new THREE.Vector3((Math.random() - 0.5) * 5, 0, (Math.random() - 0.5) * 4));
+        p.x = THREE.MathUtils.clamp(p.x, FISH_MIN.x + 0.5, FISH_MAX.x - 0.5);
+        p.z = THREE.MathUtils.clamp(p.z, FISH_MIN.z + 0.5, FISH_MAX.z - 0.5);
+        makeEgg(p, 0, breedGenome(br.a, br.b));
+      }
+      state.breeding = null;
+      state.breedCd = BREED_CD;
+      toast(`${br.a.name} & ${br.b.name} laid ${n} eggs!`);
+      sfx.breed();
+      for (let j = 0; j < 10; j++) spawnBubble(br.mid.x, br.mid.z, true);
+      notifyResidents(); updateHint();
+    }
+  } else {
+    loveFX.visible = false;
+    loveLight.intensity = 0; loveGlow.material.opacity = 0;
+    for (const s of loveSparks) s.material.opacity = 0;
+  }
+  // Ronde 12 — hati yang sudah muncul tetap melayang & memudar setelah bonding selesai
+  for (let i = loveHearts.length - 1; i >= 0; i--) {
+    const h = loveHearts[i];
+    h.life -= dt;
+    if (h.life <= 0) { scene.remove(h.s); h.s.material.dispose(); loveHearts.splice(i, 1); continue; }
+    h.s.position.y += h.vy * dt;
+    h.s.position.x += Math.sin(h.s.position.y * 2 + h.ph) * 0.15 * dt;
+    h.s.material.opacity = Math.min(1, (h.life / 2.5) * 3);
+  }
+}
+
+// ---------- Treasure chest + slot machine ----------
+function makeChest() {
+  const g = new THREE.Group();
+  const wood = matFlat(0x7a4a21, 0.9), band = matFlat(0xffc53d, 0.9);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.9, 1.1), wood);
+  base.position.y = 0.45; base.castShadow = true;
+  g.add(base);
+  for (const x of [-0.45, 0.45]) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.92, 1.14), band);
+    b.position.set(x, 0.45, 0);
+    g.add(b);
+  }
+  // lid, hinged at the back edge
+  const lidPivot = new THREE.Group();
+  lidPivot.position.set(0, 0.9, -0.55);
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 1.1), wood);
+  lid.position.set(0, 0.25, 0.55); lid.castShadow = true;
+  const lidBand = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.52, 1.14), band);
+  lidBand.position.set(0, 0.25, 0.55);
+  lidPivot.add(lid, lidBand);
+  const lock = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.3, 0.08), band);
+  lock.position.set(0, 0.78, 0.57);
+  g.add(lidPivot, lock);
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.2), new THREE.MeshStandardMaterial({
+    color: 0x4fd1ff, emissive: 0x4fd1ff, emissiveIntensity: 1.2, roughness: 0.3, flatShading: true,
+  }));
+  gem.position.set(0, 0.85, 0);
+  g.add(gem);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTex, color: 0xffd34f, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  glow.scale.set(3.2, 3.2, 1);
+  glow.position.y = 0.9;
+  g.add(glow);
+  // invisible raycast proxy (three r160 raycaster skips visible:false meshes)
+  const proxy = new THREE.Mesh(
+    new THREE.BoxGeometry(2.2, 2.0, 1.7),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+  );
+  proxy.position.y = 1.0;
+  g.add(proxy);
+  g.userData = { lid: lidPivot, glow, proxy };
+  return g;
+}
+function spawnTreasure(pos = null, announce = true) {
+  if (state.treasure) return;
+  const g = makeChest();
+  if (pos) g.position.copy(pos);
+  else {
+    const p = new THREE.Vector3();
+    for (let i = 0; i < 20; i++) {
+      p.set(-8.5 + Math.random() * 17, TANK.sandTop, -5 + Math.random() * 10);
+      if (state.eggs.every(e => e.group.position.distanceTo(p) > 3)) break;
+    }
+    g.position.copy(p);
+  }
+  scene.add(g);
+  const c = { group: g, opening: false, lidT: 0 };
+  c.group.userData.proxy.userData.pick = { type: 'treasure', ref: c };
+  rayTargets.push(c.group.userData.proxy);
+  state.treasure = c;
+  if (announce) {
+    sfx.treasureSpawn();
+    floatText(g.position, 'TREASURE!');
+    toast('A treasure chest washed in — click to open!');
+  }
+}
+function removeTreasure(c) {
+  const ri = rayTargets.indexOf(c.group.userData.proxy);
+  if (ri >= 0) rayTargets.splice(ri, 1);
+  scene.remove(c.group);
+  if (state.treasure === c) {
+    state.treasure = null;
+    state.treasureTimer = TREASURE_NEXT; // Ronde 8 — next chest in 10 minutes
+  }
+}
+function updateTreasure(dt, t) {
+  if (!state.treasure) {
+    state.treasureTimer -= dt;
+    if (state.treasureTimer <= 0) spawnTreasure();
+    return;
+  }
+  const c = state.treasure;
+  const u = c.group.userData;
+  u.glow.material.opacity = 0.3 + 0.15 * Math.sin(t * 4);
+  if (c.opening) c.lidT = Math.min(1, c.lidT + dt / 0.4);
+  u.lid.rotation.x = -1.8 * (1 - Math.pow(1 - c.lidT, 3));
+}
+function openTreasure(c) {
+  if (c.opening) return;
+  c.opening = true;
+  sfx.chest();
+  setTimeout(() => openSlotHUD(), 480);
+}
+
+// slot machine
+const SLOT_SYMBOLS = [
+  { ic: 'coin', w: 45 }, { ic: 'flakes', w: 25 }, { ic: 'fish', w: 20 }, { ic: 'gem', w: 10 },
+];
+const SLOT_IC_COLOR = { coin: '#ffd34f', flakes: '#ff9e6e', fish: '#4fd1ff', gem: '#7dd3fc' };
+function slotReelIcon(ic, px = '40px') { return icon(ic, SLOT_IC_COLOR[ic], px); }
+function rollSymbol() {
+  let r = Math.random() * 100;
+  for (const s of SLOT_SYMBOLS) { r -= s.w; if (r < 0) return s.ic; }
+  return 'coin';
+}
+function evalReels(a, b, c) {
+  if (a === b && b === c) {
+    if (a === 'gem') return { coins: 60, eggs: 1, feeds: 0, label: 'JACKPOT — +60 coins +1 egg' };
+    if (a === 'coin') return { coins: 40, eggs: 0, feeds: 0, label: 'Three coins — +40' };
+    if (a === 'flakes') return { coins: 0, eggs: 0, feeds: 2, label: 'Three feeds — +2 free feeds!' };
+    return { coins: 0, eggs: 2, feeds: 0, label: 'Three fish — +2 free eggs!' };
+  }
+  for (const [ic, coins] of [['gem', 25], ['fish', 25], ['flakes', 15], ['coin', 10]]) {
+    if ([a, b, c].filter(x => x === ic).length === 2) return { coins, eggs: 0, feeds: 0, label: `Pair of ${ic} — +${coins} coins` };
+  }
+  return { coins: 3, eggs: 0, feeds: 0, label: 'No match — +3 coins' };
+}
+const slotWrap = $('slotWrap'), slotResult = $('slotResult'), btnSpin = $('btnSpin');
+const reelStrips = [...document.querySelectorAll('#reels .strip')];
+let slotSpun = false;
+function resetReelsDisplay() {
+  reelStrips.forEach((s, i) => {
+    s.style.transition = 'none';
+    s.style.animationDuration = (1.5 + i * 0.35).toFixed(2) + 's';
+    const a = SLOT_SYMBOLS[Math.floor(Math.random() * 4)].ic,
+          b = SLOT_SYMBOLS[Math.floor(Math.random() * 4)].ic,
+          c = SLOT_SYMBOLS[Math.floor(Math.random() * 4)].ic;
+    s.innerHTML = [a, b, c, a].map(ic => `<span>${slotReelIcon(ic)}</span>`).join(''); // [A,B,C,A] = seamless reelIdle loop
+    s.parentElement.classList.add('idle');
+  });
+}
+function openSlotHUD() {
+  if (!state.treasure) return;
+  slotSpun = false;
+  btnSpin.textContent = 'SPIN';
+  slotResult.textContent = '';
+  resetReelsDisplay();
+  slotWrap.classList.remove('hidden');
+  slotWrap.querySelector('h3').innerHTML = `${icon('chest', '#ffd34f')} TREASURE!`;
+}
+function closeSlotHUD() {
+  slotWrap.classList.add('hidden');
+  const c = state.treasure;
+  if (c) { removeTreasure(c); toast('Next chest in ~10 minutes'); } // Ronde 8 — chest consumed; next spawn in 10 minutes
+  save();
+}
+function spinReels(results) {
+  sfx.slotSpin();
+  btnSpin.disabled = true;
+  reelStrips.forEach((strip, i) => {
+    strip.parentElement.classList.remove('idle');
+    const n = 8 + i * 4;
+    const syms = [];
+    for (let k = 0; k < n - 1; k++) syms.push(SLOT_SYMBOLS[Math.floor(Math.random() * 4)].ic);
+    syms.push(results[i]); // the strip always ends on the rolled symbol
+    strip.style.transition = 'none';
+    strip.style.transform = 'translateY(0)';
+    strip.innerHTML = syms.map(s => `<span>${slotReelIcon(s)}</span>`).join('');
+    void strip.offsetHeight;
+    const dur = 0.9 + i * 0.45;
+    strip.style.transition = `transform ${dur}s cubic-bezier(0.12, 0.8, 0.2, 1)`;
+    strip.style.transform = `translateY(-${(n - 1) * 72}px)`;
+  });
+  setTimeout(() => finishSpin(results), (0.9 + 2 * 0.45 + 0.25) * 1000);
+}
+function finishSpin(results) {
+  const r = evalReels(...results);
+  if (r.coins) setCoins(state.coins + r.coins);
+  for (let i = 0; i < r.eggs; i++) makeEgg(eggPos());
+  for (let i = 0; i < r.feeds; i++) dropFlakes();
+  slotResult.textContent = r.label;
+  sfx.slotWin();
+  slotSpun = true;
+  btnSpin.disabled = false;
+  btnSpin.textContent = 'Collect & Close';
+  save();
+}
+
+btnSpin.onclick = () => {
+  if (btnSpin.disabled) return;
+  ac();
+  if (slotSpun) { closeSlotHUD(); return; }
+  spinReels([rollSymbol(), rollSymbol(), rollSymbol()]);
+};
+
+// ---------- Picking (click, not drag) ----------
+const ray = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let downPos = null;
+function setMouse(e) {
+  mouse.x = (e.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+}
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  downPos = { x: e.clientX, y: e.clientY, t: performance.now() };
+});
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!downPos) return;
+  const d = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+  const quick = performance.now() - downPos.t < 400;
+  downPos = null;
+  if (d > 6 || !quick) return; // it was a camera drag
+  setMouse(e);
+  ray.setFromCamera(mouse, camera);
+  const hits = ray.intersectObjects(rayTargets, false);
+  if (!hits.length) return; // Ronde 12 — klik air kosong = tidak ada aksi (pairing via list modal)
+  const pick = hits[0].object.userData.pick;
+  if (!pick) return;
+  if (pick.type === 'treasure') openTreasure(pick.ref);
+  else if (pick.type === 'fish') {
+    const f = pick.ref;
+    for (let i = 0; i < 4; i++) spawnBubble(f.group.position.x, f.group.position.z, true);
+    toast(`${f.name} — ${SPECIES[f.speciesIdx].name}${f.variant ? ' · variant' : ''}, ${STAGE[f.stage].name} (${f.growth.toFixed(1)} growth pts, belly ${Math.round(100 - f.hunger)}/100)`);
+    pokeFish(f, hits[0].point); // Ronde 11 — poke: ikan dash menjauh dari titik klik
+  }
+});
+
+window.addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; if (!$('confirmWrap').classList.contains('hidden')) closeConfirm(); else if (resOpen) closeResidents(); else if (shopOpen) closeShop(); else if (state.mating) cancelMating(); }); // Ronde 15 — confirm modal ditutup Esc dulu
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (e.buttons) { $('tip').style.display = 'none'; return; }
+  setMouse(e);
+  ray.setFromCamera(mouse, camera);
+  const hits = ray.intersectObjects(rayTargets, false);
+  let hovered = null;
+  if (hits.length) {
+    const pick = hits[0].object.userData.pick;
+    if (pick && pick.type === 'fish') { const f = pick.ref, sp = SPECIES[f.speciesIdx]; hovered = `${f.name} (${sp.name}${f.variant ? ' · variant' : ''}) · ${f.stage === 2 ? `Adult ${ageH(f.age)}h / 24h` : `${STAGE[f.stage].name} · belly ${Math.round(100 - f.hunger)}/100`}`; }
+    else if (pick && pick.type === 'treasure') hovered = 'Treasure chest — click to open!';
+  }
+  renderer.domElement.style.cursor = hovered ? 'pointer' : 'grab';
+  const tip = $('tip');
+  if (hovered) {
+    tip.style.display = 'block';
+    tip.style.left = e.clientX + 14 + 'px';
+    tip.style.top = e.clientY + 14 + 'px';
+    tip.textContent = hovered;
+  } else tip.style.display = 'none';
+});
+
+// ---------- Shop (Ronde 10) — feed + telur per spesies ----------
+const shopWrap = $('shopWrap'), shopList = $('shopList');
+let shopOpen = false, _shopBuilt = false;
+const _eggThumb = {};
+function eggThumb(i) { // cache — 7 thumbnail per spesies di-render hanya sekali (pipeline _previewRenderer)
+  return _eggThumb[i] !== undefined ? _eggThumb[i] : (_eggThumb[i] = eggSnapshot(i));
+}
+function buildShopRows() {
+  $('shopFeedImg').src = feedThumb();
+  $('shopFeedSub').textContent = `${FLAKES_PER_PORSION} flakes per portion`; // Ronde 14 — label dari konstan
+  $('shopSub').textContent = `Eggs hatch on their own — ~${HATCH_TIME / 60} min (first egg in an empty tank: ~${FAST_HATCH / 60} min).`;
+  SPECIES.forEach((sp, i) => {
+    const row = document.createElement('div');
+    row.className = 'shopRow';
+    row.innerHTML = `
+      <img class="shopImg" src="${fishThumb(i)}" alt="${sp.name}">
+      <div class="resInfo">
+        <div class="top"><b>${icon('egg', spHex(i))} ${sp.name}</b><span class="stage">${sp.size < 0.85 ? 'small' : sp.size < 1.2 ? 'medium' : 'large'} · purebred</span></div>
+      </div>`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'buyBtn';
+    btn.dataset.egg = i;
+    btn.innerHTML = `Buy ${sp.eggPrice} ${icon('coin')}`;
+    btn.onclick = () => { ac(); askConfirm('BUY EGG', `Buy a ${sp.name} egg for ${sp.eggPrice} coins?`, 'Buy', () => { buyEgg(i); save(); refreshButtons(); }); }; // Ronde 15 — modal konfirmasi
+    row.appendChild(btn);
+    shopList.appendChild(row);
+  });
+}
+function openShop() {
+  if (shopOpen) return;
+  shopOpen = true;
+  if (!_shopBuilt) { buildShopRows(); _shopBuilt = true; }
+  $('shopTitle').innerHTML = `${icon('chest')} SHOP`;
+  shopWrap.classList.remove('hidden');
+  refreshButtons();
+}
+function closeShop() {
+  shopOpen = false;
+  shopWrap.classList.add('hidden');
+}
+function refreshShopRows() { // Ronde 10 — state tombol baris shop mengikuti koin (dipanggil refreshButtons tiap 0,5 s)
+  $('btnShopFeed').disabled = state.coins < feedQty * COST_FEED;
+  for (const b of shopList.querySelectorAll('.buyBtn')) {
+    if (!b.dataset.egg) continue;
+    b.disabled = state.coins < SPECIES[Number(b.dataset.egg)].eggPrice;
+  }
+}
+shopWrap.addEventListener('click', (e) => { if (e.target === shopWrap) closeShop(); });
+
+// ---------- Buttons ----------
+const btnFeed = $('btnFeed'), btnShop = $('btnShop'), btnBreed = $('btnBreed'), btnMute = $('btnMute'), btnReset = $('btnReset');
+function feedLabel() { // Ronde 10.5 — tombol Feed panel: sisa stok (1 klik = 1 porsi)
+  btnFeed.innerHTML = `${icon('flakes')} Feed <small>(${state.feedStock})</small>`;
+  btnFeed.title = 'Portions of flakes in stock — buy more in the Shop';
+  btnFeed.disabled = state.feedStock <= 0;
+}
+function feedBuyLabel() { // Ronde 10.5 — baris Feed di shop: qty beli + total biaya
+  const cost = feedQty * COST_FEED;
+  $('feedQtyVal').textContent = `${feedQty} × ${COST_FEED}c`;
+  $('btnFeedMinus').disabled = feedQty <= 1;
+  $('btnFeedPlus').disabled = feedQty >= FEED_QTY_MAX;
+  $('btnShopFeed').innerHTML = `${icon('flakes')} Buy <small>${feedQty > 1 ? `×${feedQty} · ` : ''}${cost} ${icon('coin')}</small>`;
+}
+feedLabel();
+feedBuyLabel();
+btnShop.innerHTML = `${icon('chest')} Shop`;
+btnBreed.innerHTML = `${icon('heart')} Breed`;
+btnMute.innerHTML = state.muted ? `${icon('vol-off')} Muted` : `${icon('vol-on')} Sound`;
+btnReset.innerHTML = `${icon('reset')} Reset`;
+btnFeed.onclick = () => { ac(); feed(); feedLabel(); save(); };
+$('btnFeedMinus').onclick = () => { ac(); feedQty = Math.max(1, feedQty - 1); feedBuyLabel(); };
+$('btnFeedPlus').onclick = () => { ac(); feedQty = Math.min(FEED_QTY_MAX, feedQty + 1); feedBuyLabel(); };
+btnShop.onclick = () => { ac(); openShop(); };
+$('btnShopClose').onclick = () => { ac(); closeShop(); }; // Ronde 10.5 — fix: handler sebelumnya tidak pernah terikat
+$('btnShopFeed').onclick = () => { ac(); const cost = feedQty * COST_FEED; askConfirm('BUY FEED', `Buy ${feedQty} portion${feedQty > 1 ? 's' : ''} of flakes for ${cost} coins?`, 'Buy', () => { buyFeed(); save(); refreshButtons(); }); }; // Ronde 15 — modal konfirmasi
+btnBreed.onclick = () => {
+  ac();
+  if (state.mating) { cancelMating(); return; }
+  const { ready } = canBreed();
+  if (!ready) {
+    sfx.deny();
+    if (state.breeding) toast('The pair is still bonding…');
+    else if (state.breedCd > 0) toast(`Breeders resting — ${fmtDur(state.breedCd)}`); // Ronde 16 — cooldown 30 menit, format durasi (dulu detik)
+    else if (state.coins < COST_BREED) toast(`Need ${COST_BREED} coins to breed`); // Ronde 16 — breeding 200 koin
+    return;
+  }
+  state.mating = {};
+  renderBreedHUD(true);
+  toast('Pick two adults — same species = purebred, crossing = hybrid chance');
+};
+$('btnBreedCancel').onclick = () => { ac(); cancelMating(); };
+$('btnBreedBack').onclick = () => { ac(); state.mating.second = null; state.mating.confirming = false; renderBreedHUD(true); };
+$('btnBreedGo').onclick = () => { ac(); confirmBreed(); };
+btnMute.onclick = () => { state.muted = !state.muted; btnMute.innerHTML = state.muted ? `${icon('vol-off')} Muted` : `${icon('vol-on')} Sound`; save(); };
+btnReset.onclick = () => {
+  ac();
+  askConfirm('RESET', `Reset FishVille? Your tank will be cleared and you will start from the beginning (${START_COINS} coins).`, 'Reset', () => { // Ronde 15 — modal konfirmasi (dulu confirm() native)
+    resetting = true; // Ronde 15 — cegah save() (pagehide/autosave) menulis ulang key yang baru dihapus saat location.replace
+    for (const k of [SAVE_KEY, SAVE_KEY_OLD, SAVE_KEY_OLDEST, META_KEY]) {
+      try { localStorage.removeItem(k); } catch (e) { /* storage unavailable */ }
+    }
+    location.replace(location.pathname + location.search); // fresh boot without #demo
+  });
+};
+// Ronde 15 — modal konfirmasi generik (Buy/Sell/Reset) — satu wrapper untuk semua aksi
+let confirmCb = null;
+function askConfirm(title, text, okLabel, cb) {
+  $('confirmTitle').textContent = title;
+  $('confirmText').textContent = text;
+  $('btnConfirmYes').textContent = okLabel;
+  confirmCb = cb;
+  $('confirmWrap').classList.remove('hidden');
+}
+function closeConfirm() { $('confirmWrap').classList.add('hidden'); confirmCb = null; }
+$('btnConfirmYes').onclick = () => { ac(); const cb = confirmCb; closeConfirm(); if (cb) cb(); };
+$('btnConfirmNo').onclick = () => { ac(); closeConfirm(); };
+$('confirmWrap').addEventListener('click', (e) => { if (e.target === $('confirmWrap')) closeConfirm(); });
+function refreshButtons() {
+  feedLabel(); // Ronde 10.5 — label + disabled mengikuti stok (1 klik Feed = 1 porsi)
+  if (shopOpen) refreshShopRows(); // Ronde 10 — tombol baris shop mengikuti koin
+  const { adults } = canBreed();
+  if (state.mating) { btnBreed.disabled = false; btnBreed.innerHTML = `${icon('heart')} ${state.mating.confirming ? 'Confirming…' : 'Picking…'} (Esc to cancel)`; }
+  else if (state.breeding) { btnBreed.disabled = true; btnBreed.innerHTML = `${icon('heart')} Breeding…`; }
+  else if (state.breedCd > 0) { btnBreed.disabled = true; btnBreed.innerHTML = `${icon('heart')} Ready in ${fmtDur(state.breedCd)}`; } // Ronde 16 — format durasi 30 menit
+  else if (adults.length >= 2 && state.coins >= COST_BREED) { btnBreed.disabled = false; btnBreed.innerHTML = `${icon('heart')} Breed`; }
+  else if (adults.length >= 2) { btnBreed.disabled = true; btnBreed.innerHTML = `${icon('heart')} Breed (need ${COST_BREED}c)`; } // Ronde 16 — biaya breeding
+  else { btnBreed.disabled = true; btnBreed.innerHTML = `${icon('heart')} Breed (need 2 adults)`; }
+}
+
+// ---------- Save / load ----------
+let saveTimer = 5;
+let resetting = false; // Ronde 15 — guard reset: jangan menulis ulang key yang baru dihapus
+function save() {
+  if (resetting) return; // Ronde 15 — pagehide/autosave/aksi saat location.replace() tidak boleh menimpa hasil reset
+  try {
+    const data = {
+      v: 5, coins: state.coins, feedStock: state.feedStock, muted: state.muted, breedCd: state.breedCd, // Ronde 10.5 — v5 menambah feedStock
+      fish: state.fish.map(f => ({ name: f.name, speciesIdx: f.speciesIdx, growth: f.growth, hunger: f.hunger, age: f.age, traits: f.traits, variant: !!f.variant, p: f.group.position.toArray() })),
+      eggs: state.eggs.map(e => ({ h: e.h, genome: e.genome, p: e.group.position.toArray() })),
+      treasure: state.treasure ? { x: state.treasure.group.position.x, z: state.treasure.group.position.z } : null,
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    writeMeta(Date.now()); // Ronde 13 — lastSeen = waktu save: state selalu konsisten dengan lastSeen
+  } catch (e) { /* storage unavailable */ }
+}
+function load() {
+  let data = null;
+  for (const k of [SAVE_KEY, SAVE_KEY_OLD, SAVE_KEY_OLDEST]) {
+    try { const d = JSON.parse(localStorage.getItem(k)); if (d) { data = d; break; } } catch (e) { /* try the next key */ }
+  }
+  if (!data) return;
+  setCoins(data.coins != null ? data.coins : 100);
+  state.muted = !!data.muted;
+  btnMute.innerHTML = state.muted ? `${icon('vol-off')} Muted` : `${icon('vol-on')} Sound`;
+  state.breedCd = data.breedCd || 0;
+  state.feedStock = data.feedStock != null ? Math.max(0, Math.min(999, data.feedStock | 0)) : 0; // Ronde 10.5 — save v4/v3 (tanpa field) → 0, beli dulu di shop
+  for (const fd of data.fish || [])
+    spawnFry(new THREE.Vector3().fromArray(fd.p).clamp(FISH_MIN, FISH_MAX), fd.speciesIdx | 0, Number(fd.growth) || 0, fd.name || null,
+      Math.min(100, Math.max(0, Number(fd.hunger) || 60)), Math.max(0, Number(fd.age) || 0),
+      (fd.traits && typeof fd.traits.size === 'number') ? fd.traits : null, !!fd.variant);
+  for (const ed of data.eggs || [])
+    makeEgg(new THREE.Vector3().fromArray(ed.p), Math.min(0.99, ed.h || 0), ed.genome || null);
+  if (data.treasure) {
+    spawnTreasure(new THREE.Vector3(data.treasure.x, TANK.sandTop, data.treasure.z), false);
+    toast('A treasure chest is still in your tank.');
+  }
+  notifyResidents(); updateHint();
+}
+// Ronde 13 — meta: lastSeen wall clock (key terpisah; save v5 tidak perlu migrasi)
+function readMeta() {
+  try { const d = JSON.parse(localStorage.getItem(META_KEY)); return d && typeof d.lastSeen === 'number' ? d : null; } catch (e) { return null; }
+}
+function writeMeta(ts) {
+  try { localStorage.setItem(META_KEY, JSON.stringify({ lastSeen: ts })); } catch (e) { /* storage unavailable */ }
+}
+
+// ---------- Main loop ----------
+let listTimer = 0, hintTimer = 0;
+const __FV_FPS = { n: 0, t: performance.now() };
+function animate() {
+  requestAnimationFrame(animate);
+  { const now = performance.now(); __FV_FPS.n++; if (now - __FV_FPS.t >= 500) { window.__FV && (window.__FV.__fps = Math.round(__FV_FPS.n * 1000 / (now - __FV_FPS.t))); __FV_FPS.n = 0; __FV_FPS.t = now; } }
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const t = clock.elapsedTime;
+
+  // water surface waves (x/z are static; only y is animated)
+  const wp = waterGeo.attributes.position;
+  for (let i = 0; i < wp.count; i++) {
+    const x = wp.getX(i), z = wp.getZ(i);
+    wp.setY(i, Math.sin(x * 0.55 + t * 1.6) * 0.12 + Math.cos(z * 0.8 + t * 1.2) * 0.1 + Math.sin((x + z) * 0.35 + t * 2.2) * 0.05);
+  }
+  wp.needsUpdate = true;
+  waterGeo.computeVertexNormals();
+
+  for (const s of swayers) {
+    s.obj.rotation.z = Math.sin(t * 0.9 + s.phase) * s.amp;
+    s.obj.rotation.x = Math.cos(t * 0.7 + s.phase) * s.amp * 0.6;
+  }
+  for (const c of caustics) {
+    c.m.position.x = THREE.MathUtils.clamp(c.m.position.x + Math.sin(t * c.speed + c.phase) * 0.15 * dt, -9, 9);
+    c.m.position.z = THREE.MathUtils.clamp(c.m.position.z + Math.cos(t * c.speed * 0.8 + c.phase) * 0.15 * dt, -5.2, 5.2);
+    c.m.material.opacity = 0.1 + Math.sin(t * 1.3 + c.phase) * 0.05;
+  }
+
+  bubbleTimer -= dt;
+  if (bubbleTimer <= 0) {
+    bubbleTimer = 0.28;
+    const a = AERATORS[Math.floor(Math.random() * AERATORS.length)];
+    spawnBubble(a[0], a[1]);
+  }
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    b.m.position.y += b.vy * dt;
+    b.m.position.x += Math.sin(t * 3 + b.phase) * 0.3 * dt;
+    if (b.m.position.y > TANK.waterTop - 0.2) { scene.remove(b.m); bubbles.splice(i, 1); }
+  }
+
+  for (const f of state.fish) updateFish(f, dt, t);
+  updateEggs(dt, t);
+  updateFoods(dt, t);
+  updateBreeding(dt);
+  updateTreasure(dt, t);
+  for (let i = state.floats.length - 1; i >= 0; i--) {
+    const fl = state.floats[i];
+    fl.t += dt;
+    fl.spr.position.y += dt * 1.1;
+    fl.spr.material.opacity = Math.max(0, 1 - fl.t / 1.3);
+    if (fl.t > 1.3) { scene.remove(fl.spr); fl.spr.material.map.dispose(); fl.spr.material.dispose(); state.floats.splice(i, 1); }
+  }
+
+  listTimer += dt;
+  if (listTimer > 0.5) { listTimer = 0; notifyResidents(); refreshButtons(); renderBreedHUD(); }
+  hintTimer += dt;
+  if (hintTimer > 2) { hintTimer = 0; updateHint(); }
+  clockTimer += dt;
+  if (clockTimer >= 1) { clockTimer = 0; updateClock(); }
+  saveTimer -= dt;
+  if (saveTimer <= 0) { saveTimer = 5; save(); }
+
+  controls.update();
+  _zoomDir.subVectors(camera.position, controls.target).normalize();
+  const dNow = camera.position.distanceTo(controls.target);
+  camera.position.copy(controls.target).addScaledVector(_zoomDir, dNow + (zoomGoal - dNow) * 0.18);
+  renderer.render(scene, camera);
+  if (!window.__FV_BOOTED) window.__FV_BOOTED = true;
+}
+
+// ---------- Offline catch-up (Ronde 13 — real time via lastSeen; rAF pause saat hidden, halaman mati saat closed) ----------
+const OFFLINE_STEP = 0.25; // detik per langkah replay
+function recordDeparture() { save(); } // checkpoint keberangkatan: save() men-stamp lastSeen (di dalam save())
+document.addEventListener('visibilitychange', () => { if (document.hidden) recordDeparture(); else handleReturn(); });
+window.addEventListener('pagehide', () => recordDeparture()); // close / reload / navigate / freeze (Memory Saver)
+function handleReturn() {
+  const meta = readMeta();
+  if (!meta) return null;
+  const away = Math.min(OFFLINE_MAX, Math.max(0, (Date.now() - meta.lastSeen) / 1000));
+  if (away < 1) return null;
+  const rep = applyAway(away);
+  writeMeta(Date.now());
+  if (away >= AWAY_REPORT_MIN) showAwayReport(rep, away);
+  return rep;
+}
+function applyAway(sec) { return sec <= REPLAY_MAX ? awayReplay(sec) : awayAnalytic(sec); }
+function snapshotAway() {
+  return {
+    fish: new Map(state.fish.map(f => [f.id, { name: f.name, stage: f.stage, senior: !!f.senior }])),
+    chest: !!state.treasure,
+    breed: state.breeding ? [state.breeding.a.name, state.breeding.b.name] : null,
+  };
+}
+function buildReport(sec, snap) {
+  const rep = { sec, born: [], stageUps: [], seniors: 0, passedAway: awayDeaths.slice(), chest: false, breed: null, starving: false }; // Ronde 14 — cause of death dari awayDeaths (diisi killFish)
+  for (const f of state.fish) {
+    const b = snap.fish.get(f.id);
+    if (!b) rep.born.push(f.name);
+    else {
+      if (f.stage > b.stage) rep.stageUps.push(f.name);
+      if (f.senior && !b.senior) rep.seniors++;
+    }
+  }
+  rep.chest = !!state.treasure && !snap.chest;
+  rep.breed = snap.breed && !state.breeding ? { names: snap.breed, n: null } : null;
+  rep.starving = state.fish.some(f => f.hunger >= STARVE_TOAST);
+  return rep;
+}
+function finishAway() { notifyResidents(); refreshButtons(); renderBreedHUD(); save(); }
+function awayReplay(sec) {
+  awayDeaths.length = 0; // Ronde 14 — reset pencatatan cause kematian
+  const snap = snapshotAway();
+  const steps = Math.floor(sec / OFFLINE_STEP); // Ronde 13 — cap fix: OFFLINE_CAP lama dihitung sebagai STEP (efektif 150 s); sekarang cap dalam detik (REPLAY_MAX)
+  let t = clock.elapsedTime;
+  for (let i = 0; i < steps; i++) {
+    t += OFFLINE_STEP;
+    for (const f of state.fish) updateFish(f, OFFLINE_STEP, t);
+    updateEggs(OFFLINE_STEP, t);
+    updateFoods(OFFLINE_STEP, t);
+    updateBreeding(OFFLINE_STEP);
+    updateTreasure(OFFLINE_STEP, t);
+  }
+  const rep = buildReport(sec, snap);
+  finishAway();
+  return rep;
+}
+function awayAnalytic(sec) {
+  // absen panjang: hanya state, tanpa AI/scene (41 ikan × 24 jam ÷ 60 s langkah ≈ beberapa ms)
+  const rep = { sec, born: [], stageUps: [], seniors: 0, passedAway: [], chest: false, breed: null, starving: false };
+  awayDeaths.length = 0; // Ronde 14 — reset (ikan yang mulai mati di sini baru 'dead' di play langsung)
+  for (const f of state.fish) {
+    if (f.dying) continue;
+    let left = sec;
+    while (left > 0 && !f.dying) {
+      const dt = Math.min(ANALYTIC_STEP, left);
+      const stageMod = f.stage === 0 ? 1.15 : f.stage === 2 ? 0.9 : 1; // rumus sama dengan updateFish
+      f.hunger = Math.min(100, f.hunger + HUNGER_DECAY * stageMod * dt);
+      if (f.hunger >= 100) { // Ronde 14 — vonis kelaparan (rumus sama updateFish); growth pasif sudah dihapus
+        f.starveT += dt;
+        if (f.starveT >= STARVE_KILL[f.stage]) { startDying(f, 'starve'); rep.passedAway.push({ name: f.name, cause: 'starve' }); break; } // animasi kematian main setelah kembali
+      }
+      if (f.stage === 2) {
+        f.age += dt;
+        if (!f.senior && f.age > SENIOR_FRAC * ADULT_LIFESPAN) { f.senior = true; tintSenior(f); rep.seniors++; }
+        if (f.age >= ADULT_LIFESPAN) { startDying(f); rep.passedAway.push({ name: f.name, cause: 'age' }); break; } // animasi kematian main setelah kembali
+      }
+      left -= dt;
+    }
+  }
+  for (let i = state.eggs.length - 1; i >= 0; i--) {
+    const e = state.eggs[i];
+    e.h = Math.min(1, e.h + sec / HATCH_TIME);
+    if (e.h < 1) continue;
+    state.eggs.splice(i, 1);
+    scene.remove(e.group);
+    const g = e.genome || { species: Math.floor(Math.random() * SPECIES.length), traits: defaultTraits(), variant: false };
+    const pos = e.group.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+    pos.x = THREE.MathUtils.clamp(pos.x, FISH_MIN.x, FISH_MAX.x);
+    pos.z = THREE.MathUtils.clamp(pos.z, FISH_MIN.z, FISH_MAX.z);
+    const f = spawnFry(pos, g.species, 0, null, 60, 0, g.traits, g.variant);
+    rep.born.push(f.name);
+  }
+  for (let i = state.foods.length - 1; i >= 0; i--) { scene.remove(state.foods[i].m); state.foods.splice(i, 1); } // life ≤ 25 s ≪ absen panjang
+  state.breedCd = Math.max(0, state.breedCd - sec);
+  const br = state.breeding;
+  if (br) {
+    if (sec >= br.dur - br.t) {
+      const [lo, hi] = eggRange(br.a, br.b);
+      const n = lo + Math.floor(Math.random() * (hi - lo + 1));
+      for (let i = 0; i < n; i++) {
+        const p = br.mid.clone().add(new THREE.Vector3((Math.random() - 0.5) * 5, 0, (Math.random() - 0.5) * 4));
+        p.x = THREE.MathUtils.clamp(p.x, FISH_MIN.x + 0.5, FISH_MAX.x - 0.5);
+        p.z = THREE.MathUtils.clamp(p.z, FISH_MIN.z + 0.5, FISH_MAX.z - 0.5);
+        makeEgg(p, 0, breedGenome(br.a, br.b));
+      }
+      state.breeding = null;
+      state.breedCd = BREED_CD;
+      rep.breed = { names: [br.a.name, br.b.name], n };
+    } else br.t += sec;
+  }
+  if (!state.treasure) {
+    state.treasureTimer = Math.max(0, state.treasureTimer - sec);
+    if (state.treasureTimer <= 0) { spawnTreasure(null, false); rep.chest = true; } // chest menunggu, dilaporkan di away report
+  }
+  rep.starving = state.fish.some(f => f.hunger >= STARVE_TOAST);
+  finishAway();
+  return rep;
+}
+
+// ---------- Away report (Ronde 13 — modal "While you were away") ----------
+function fmtDur(sec) {
+  sec = Math.round(sec);
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m`;
+  return `${sec}s`;
+}
+function showAwayReport(rep, away) {
+  const names = (arr, cap) => arr.length > cap ? `${arr.slice(0, cap).join(', ')} and ${arr.length - cap} more` : arr.join(', ');
+  const rows = [];
+  if (rep.born.length) rows.push(`${icon('egg', '#7dff9e')} ${rep.born.length} fry hatched: ${names(rep.born, 5)}`);
+  if (rep.stageUps.length) rows.push(`${icon('fish', '#ffd34f')} ${rep.stageUps.length} fish grew up: ${names(rep.stageUps, 3)}`);
+  if (rep.seniors) rows.push(`${icon('hourglass', '#c8d4e0')} ${rep.seniors} fish got old`);
+  if (rep.passedAway.length) rep.passedAway.slice(0, 3).forEach(d => rows.push(`${icon('fish', '#ff6a4d')} ${d.name} ${d.cause === 'starve' ? 'passed away from starvation' : 'passed away at a ripe old age'}`)); // Ronde 14 — cause of death
+  if (rep.breed) rows.push(`${icon('heart', '#ff7aa2')} ${rep.breed.names.join(' & ')} laid ${rep.breed.n != null ? rep.breed.n + ' eggs' : 'eggs'}`);
+  if (rep.chest) rows.push(`${icon('chest', '#4fd1ff')} A treasure chest appeared — click it to open!`);
+  if (rep.starving) rows.push(`${icon('fish', '#ff6a4d')} The fish are starving — feed them!`);
+  if (!rows.length) rows.push('All quiet — the tank is as you left it.');
+  $('awayTitle').innerHTML = `${icon('hourglass')} WHILE YOU WERE AWAY`;
+  $('awaySub').textContent = `You were gone ${fmtDur(away)} — here's what happened in the tank.`;
+  $('awayList').innerHTML = rows.map(r => `<div class="awayRow">${r}</div>`).join('');
+  $('awayWrap').classList.remove('hidden');
+  $('btnAwayClose').onclick = () => $('awayWrap').classList.add('hidden');
+}
+
+// ---------- Demo tank (open index.html#demo) ----------
+function clearTank() {
+  for (const f of state.fish) {
+    scene.remove(f.group);
+    const ri = rayTargets.indexOf(f.group.userData.body);
+    if (ri >= 0) rayTargets.splice(ri, 1);
+  }
+  state.fish.length = 0;
+  for (const e of state.eggs) scene.remove(e.group);
+  state.eggs.length = 0;
+  for (const fl of state.foods) scene.remove(fl.m);
+  state.foods.length = 0;
+  if (state.treasure) {
+    const c = state.treasure;
+    const ri = rayTargets.indexOf(c.group.userData.proxy);
+    if (ri >= 0) rayTargets.splice(ri, 1);
+    scene.remove(c.group);
+    state.treasure = null;
+  }
+}
+function seedDemo() {
+  clearTank();
+  setCoins(60);
+  state.feedStock = 3; // Ronde 10.5 — demo: feed langsung bisa dicoba
+  spawnFry(new THREE.Vector3(-4, 7, -1), 0, 8, null, 15);   // adult orange (full — won't compete)
+  spawnFry(new THREE.Vector3(3, 5, 2), 2, 8, null, 15);     // adult blue (full)
+  spawnFry(new THREE.Vector3(0, 8.5, 0), 1, 4, null, 55);   // juvenile red
+  spawnFry(new THREE.Vector3(-6, 4, 2), 4, 1, null, 85);    // fry golden (hungry)
+  makeEgg(new THREE.Vector3(6, 0, 3), 0.4);
+  spawnTreasure();
+  state.treasureTimer = TREASURE_NEXT;
+  toast('Demo tank loaded — feed, open the treasure chest, and breed!'); // Ronde 16 — collect koin dihapus
+}
+
+window.__FV = {
+  scene, state, renderer, camera, controls,
+  __SPECIES: SPECIES, __speciesGeometry: _speciesGeometry,
+  forceTreasure() { if (!state.treasure) spawnTreasure(); return state.treasure; },
+  ageFish(id, seconds) { const f = state.fish.find(x => x.id === id); if (f && f.stage === 2) f.age = Math.min(ADULT_LIFESPAN, f.age + seconds); return f; },
+  setHunger(id, v) { const f = state.fish.find(x => x.id === id); if (f) f.hunger = Math.min(100, Math.max(0, v)); return f; },
+  setTreasureTimer(s) { state.treasureTimer = s; return state.treasureTimer; }, // test hook (Ronde 8)
+  setEggH(i, h) { const e = state.eggs[i]; if (e) e.h = Math.max(0, Math.min(0.999, h)); return e; }, // test hook (Ronde 10) — fast-forward hatching
+  setFeedStock(n) { state.feedStock = Math.max(0, n | 0); feedLabel(); return state.feedStock; }, // test hook (Ronde 10.5)
+  sellFish(id) { const f = state.fish.find(x => x.id === id); if (f) return { name: f.name, price: sellFish(f) }; return null; }, // test hook (Ronde 14) — jual ikan (bypass confirm)
+  feedFish(id, n) { const f = state.fish.find(x => x.id === id); if (!f) return null; for (let i = 0; i < n; i++) { if (f.hunger < 25) f.hunger = 100; // ikan tetap bisa makan, sama seperti ikan kenyang lagi
+    if (!state.foods.length) dropFlakes(1);
+    eatFood(f, state.foods[0]);
+  } return { hunger: f.hunger, growth: f.growth, stage: f.stage, starveT: f.starveT }; }, // test hook (Ronde 14) — n flake via jalur eatFood asli (growth hanya dari makan)
+  simAway(sec) { writeMeta(Date.now() - sec * 1000); return handleReturn(); }, // test hook (Ronde 13) — jalankan jalur return sungguhan
+  pokeFish(id) { const f = state.fish.find(x => x.id === id); if (f) pokeFish(f, f.group.position.clone()); return f; }, // test hook (Ronde 11)
+  moods() { return Object.fromEntries(state.fish.map(f => [f.id, f.mood])); }, // test hook (Ronde 11) — snapshot mood per-ikan
+  spawnSpecies(i, traits, variant) { const pos = new THREE.Vector3((Math.random() * 8 - 4), 4 + Math.random() * 4, (Math.random() * 8 - 4)); return spawnFry(pos, i % SPECIES.length, 8, null, 15, 0, traits || undefined, !!variant); },
+  simBreed(n, mode, ta, tb) {
+    ta = ta || { size: 1, speed: 1, hue: 0 }; tb = tb || ta;
+    const A = { speciesIdx: 0, traits: ta }, B = { speciesIdx: mode === 'cross' ? 1 : 0, traits: tb };
+    const spCount = {}, out = [];
+    for (let i = 0; i < n; i++) { const g = breedGenome(A, B); spCount[g.species] = (spCount[g.species] || 0) + 1; out.push(g); }
+    const mean = k => out.reduce((s, g) => s + g.traits[k], 0) / n;
+    const ext = k => [Math.min(...out.map(g => g.traits[k])), Math.max(...out.map(g => g.traits[k]))];
+    return { n, split: spCount, variantPct: 100 * out.filter(g => g.variant).length / n, sizeMean: mean('size'), speedMean: mean('speed'), hueMean: mean('hue'), sizeRange: ext('size'), hueRange: ext('hue') };
+  },
+  fps() { return window.__FV.__fps || 0; },
+};
+
+// ---------- Boot ----------
+load();
+if (location.hash === '#demo') seedDemo();
+else handleReturn(); // Ronde 13 — real time: catch-up dari lastSeen (lewati di #demo — tank di-reseed)
+refreshButtons();
+updateHint();
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>

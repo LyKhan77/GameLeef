@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Potato Clicker 3000</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+    .wrapper {
+      width: 100%;
+      max-width: 600px;
+      height: 100%;
+      max-height: 680px;
+      background: #181818;
+      border: 1px solid #282828;
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+      overflow: hidden;
+    }
+    .header {
+      padding: 16px 20px;
+      background: #1f1f1f;
+      border-bottom: 1px solid #282828;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header h2 {
+      font-size: 18px;
+      color: #ffa42b;
+      font-weight: 800;
+    }
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+    }
+    .potato-btn {
+      font-size: 90px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      transition: transform 0.08s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      outline: none;
+      filter: drop-shadow(0 10px 20px rgba(255, 164, 43, 0.25));
+    }
+    .potato-btn:active {
+      transform: scale(0.88) rotate(-4deg);
+    }
+    .stats-box {
+      margin-top: 15px;
+      text-align: center;
+    }
+    .count {
+      font-size: 32px;
+      font-weight: 900;
+      color: #ffffff;
+      font-family: monospace;
+    }
+    .rate {
+      font-size: 13px;
+      color: #1ed760;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .upgrade-list {
+      height: 230px;
+      background: #141414;
+      border-top: 1px solid #282828;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .upgrade-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1c1c1c;
+      border: 1px solid #282828;
+      padding: 10px 14px;
+      border-radius: 10px;
+      transition: all 0.15s;
+    }
+    .upgrade-card.disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+    .upgrade-card:hover:not(.disabled) {
+      background: #252525;
+      border-color: #ffa42b;
+    }
+    .up-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .up-icon { font-size: 22px; }
+    .up-title { font-size: 13px; font-weight: 700; color: #fff; }
+    .up-desc { font-size: 10px; color: #b3b3b3; }
+    .buy-btn {
+      background: #ffa42b;
+      color: #000;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .floating-text {
+      position: absolute;
+      color: #ffa42b;
+      font-weight: 900;
+      font-size: 20px;
+      pointer-events: none;
+      animation: floatUp 0.7s ease-out forwards;
+    }
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-60px) scale(1.3); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h2>🥔 Potato Clicker 3000</h2>
+      <span style="font-size: 11px; background: rgba(30, 215, 96, 0.2); color: #1ed760; padding: 3px 8px; border-radius: 9999px; font-weight: 700;">
+        ⚡ 100% Spek Kentang
+      </span>
+    </div>
+
+    <div class="main-area" id="clickArea">
+      <button class="potato-btn" id="potatoBtn">🥔</button>
+      <div class="stats-box">
+        <div class="count" id="countText">0 Kentang</div>
+        <div class="rate" id="rateText">+0 Kentang/detik</div>
+      </div>
+    </div>
+
+    <div class="upgrade-list" id="upgradeList"></div>
+  </div>
+
+  <script>
+    let potatoes = 0;
+    let pps = 0; // potatoes per second
+    let clickPower = 1;
+
+    const countText = document.getElementById('countText');
+    const rateText = document.getElementById('rateText');
+    const potatoBtn = document.getElementById('potatoBtn');
+    const clickArea = document.getElementById('clickArea');
+    const upgradeList = document.getElementById('upgradeList');
+
+    const upgrades = [
+      { id: 'fork', name: 'Garpu Plastik', icon: '🍴', cost: 15, pps: 0.5, count: 0 },
+      { id: 'celeron', name: 'Prosesor Celeron 2008', icon: '💻', cost: 100, pps: 4, count: 0 },
+      { id: 'kopi', name: 'Kafein Doa Ibu', icon: '☕', cost: 600, pps: 20, count: 0 },
+      { id: 'gpu', name: 'RTX Kentang 4090', icon: '🎮', cost: 2500, pps: 100, count: 0 },
+      { id: 'lee', name: 'Berkah Lee Khan', icon: '👑', cost: 10000, pps: 500, count: 0 }
+    ];
+
+    function updateDisplay() {
+      countText.innerText = Math.floor(potatoes).toLocaleString('id-ID') + ' Kentang';
+      rateText.innerText = '+' + pps.toFixed(1) + ' Kentang/detik';
+      renderUpgrades();
+    }
+
+    function renderUpgrades() {
+      upgradeList.innerHTML = '';
+      upgrades.forEach(u => {
+        const canAfford = potatoes >= u.cost;
+        const card = document.createElement('div');
+        card.className = 'upgrade-card' + (canAfford ? '' : ' disabled');
+        card.innerHTML = `
+          <div class="up-left">
+            <span class="up-icon">${u.icon}</span>
+            <div>
+              <div class="up-title">${u.name} (x${u.count})</div>
+              <div class="up-desc">+${u.pps} /dtk • Biaya: ${u.cost.toLocaleString('id-ID')}</div>
+            </div>
+          </div>
+          <button class="buy-btn">Beli</button>
+        `;
+        card.querySelector('.buy-btn').addEventListener('click', (e) => {
+          e.stopPropagation();
+          buyUpgrade(u);
+        });
+        upgradeList.appendChild(card);
+      });
+    }
+
+    function buyUpgrade(u) {
+      if (potatoes >= u.cost) {
+        potatoes -= u.cost;
+        u.count++;
+        pps += u.pps;
+        u.cost = Math.floor(u.cost * 1.25);
+        updateDisplay();
+      }
+    }
+
+    potatoBtn.addEventListener('click', (e) => {
+      potatoes += clickPower;
+      updateDisplay();
+
+      // Floating text effect
+      const floatEl = document.createElement('div');
+      floatEl.className = 'floating-text';
+      floatEl.innerText = '+' + clickPower;
+      const rect = clickArea.getBoundingClientRect();
+      floatEl.style.left = (e.clientX - rect.left - 10) + 'px';
+      floatEl.style.top = (e.clientY - rect.top - 20) + 'px';
+      clickArea.appendChild(floatEl);
+      setTimeout(() => floatEl.remove(), 700);
+    });
+
+    // Auto produce loop (10 ticks per sec)
+    setInterval(() => {
+      if (pps > 0) {
+        potatoes += pps / 10;
+        countText.innerText = Math.floor(potatoes).toLocaleString('id-ID') + ' Kentang';
+      }
+    }, 100);
+
+    renderUpgrades();
+    updateDisplay();
+  </script>
+</body>
+</html>
