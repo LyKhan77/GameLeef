@@ -4,11 +4,12 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useMe
 import { GameItem, GAMES_CATALOG } from '@/data/games';
 import { sfx } from '@/lib/sfx';
 import { GameBridgeMessage } from '@/lib/gameBridge';
-import { submitScoreToDatabase } from '@/lib/supabase';
+import { submitScoreToDatabase, registerProfileToDatabase } from '@/lib/supabase';
 
 export interface PlayerProfile {
   username: string;
   avatar: string;
+  hasOnboarded: boolean;
   totalScore: number;
   gamesPlayed: number;
   highScores: Record<string, number>;
@@ -25,6 +26,7 @@ interface GamePlayerContextType {
   isTheaterOpen: boolean;
   isMuted: boolean;
   isLeeModalOpen: boolean;
+  isOnboardingOpen: boolean;
   likedGameIds: string[];
   playerProfile: PlayerProfile;
   lastScoreSubmitted: { gameId: string; score: number } | null;
@@ -37,6 +39,9 @@ interface GamePlayerContextType {
   toggleMute: () => void;
   openLeeModal: () => void;
   closeLeeModal: () => void;
+  openOnboarding: () => void;
+  closeOnboarding: () => void;
+  completeOnboarding: (name: string, avatar?: string) => void;
   updateUsername: (name: string) => void;
   getGamePlaytime: (gameId: string) => number;
   getGamePlayCount: (gameId: string) => number;
@@ -44,8 +49,9 @@ interface GamePlayerContextType {
 }
 
 const DEFAULT_PROFILE: PlayerProfile = {
-  username: 'Guest Player #1337',
-  avatar: '🎮',
+  username: '',
+  avatar: '🌿',
+  hasOnboarded: false,
   totalScore: 0,
   gamesPlayed: 0,
   highScores: {},
@@ -62,6 +68,7 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
   const [isTheaterOpen, setIsTheaterOpen] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isLeeModalOpen, setIsLeeModalOpen] = useState<boolean>(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [likedGameIds, setLikedGameIds] = useState<string[]>([]);
   const [playerProfile, setPlayerProfile] = useState<PlayerProfile>(DEFAULT_PROFILE);
   const [lastScoreSubmitted, setLastScoreSubmitted] = useState<{ gameId: string; score: number } | null>(null);
@@ -76,19 +83,27 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
       const savedProfile = localStorage.getItem('gameleef_player_profile');
       if (savedProfile) {
         const parsed: PlayerProfile = JSON.parse(savedProfile);
+        const onboarded = Boolean(parsed.hasOnboarded && parsed.username && parsed.username !== 'Guest Player #1337');
         setPlayerProfile({
           ...DEFAULT_PROFILE,
           ...parsed,
+          hasOnboarded: onboarded,
           playtimes: parsed.playtimes || {},
           playCounts: parsed.playCounts || {},
         });
+        if (!onboarded) {
+          setIsOnboardingOpen(true);
+        }
         if (parsed.lastPlayedGameId) {
           const found = GAMES_CATALOG.find((g) => g.id === parsed.lastPlayedGameId);
           if (found) setActiveGame(found);
         }
+      } else {
+        // First-time visitor -> trigger onboarding input!
+        setIsOnboardingOpen(true);
       }
     } catch {
-      // Ignore storage errors
+      setIsOnboardingOpen(true);
     }
 
     if (GAMES_CATALOG.length > 0 && !activeGame) {
@@ -112,7 +127,7 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
         setLastScoreSubmitted({ gameId: data.gameId, score: data.score });
         
         // Push to Supabase if connected
-        submitScoreToDatabase(data.gameId, playerProfile.username, data.score);
+        submitScoreToDatabase(data.gameId, playerProfile.username || 'Pemain Santuy', data.score);
 
         setPlayerProfile((prev) => {
           const currentHigh = prev.highScores[data.gameId] || 0;
@@ -255,14 +270,51 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
     sfx.playClick();
   };
 
-  const updateUsername = (name: string) => {
+  const openOnboarding = () => {
+    setIsOnboardingOpen(true);
+  };
+
+  const closeOnboarding = () => {
+    // Only close if player has a valid username
+    if (playerProfile.hasOnboarded && playerProfile.username) {
+      setIsOnboardingOpen(false);
+    }
+  };
+
+  const completeOnboarding = (name: string, avatar: string = '🌿') => {
+    const finalName = name.trim() || 'Player Santuy';
+    const finalAvatar = avatar || '🌿';
+
     setPlayerProfile((prev) => {
-      const updated = { ...prev, username: name.trim() || 'Player Santuy' };
+      const updated: PlayerProfile = {
+        ...prev,
+        username: finalName,
+        avatar: finalAvatar,
+        hasOnboarded: true,
+      };
       try {
         localStorage.setItem('gameleef_player_profile', JSON.stringify(updated));
       } catch {}
       return updated;
     });
+
+    setIsOnboardingOpen(false);
+    sfx.playEasterEgg();
+
+    // Asynchronously save to Supabase profiles table
+    registerProfileToDatabase(finalName, finalAvatar);
+  };
+
+  const updateUsername = (name: string) => {
+    const finalName = name.trim() || 'Player Santuy';
+    setPlayerProfile((prev) => {
+      const updated = { ...prev, username: finalName };
+      try {
+        localStorage.setItem('gameleef_player_profile', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    registerProfileToDatabase(finalName, playerProfile.avatar);
   };
 
   const getGamePlaytime = (gameId: string): number => {
@@ -283,6 +335,7 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
         isTheaterOpen,
         isMuted,
         isLeeModalOpen,
+        isOnboardingOpen,
         likedGameIds,
         playerProfile,
         lastScoreSubmitted,
@@ -295,6 +348,9 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
         toggleMute,
         openLeeModal,
         closeLeeModal,
+        openOnboarding,
+        closeOnboarding,
+        completeOnboarding,
         updateUsername,
         getGamePlaytime,
         getGamePlayCount,

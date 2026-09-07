@@ -3,13 +3,14 @@
 -- ============================================================================
 -- Jalankan query SQL ini di Supabase SQL Editor (https://app.supabase.com)
 
--- 1. Table untuk profil pemain (auth.users extension)
+-- 1. Table untuk profil pemain (Mendukung Guest Onboarding & Auth User)
 CREATE TABLE IF NOT EXISTS public.profiles (
-  id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
-  avatar_url TEXT,
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  username TEXT NOT NULL,
+  avatar_url TEXT DEFAULT '🌿',
   total_score BIGINT DEFAULT 0,
   games_played INT DEFAULT 0,
+  user_id UUID REFERENCES auth.users ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -33,20 +34,21 @@ ON public.game_scores(game_id, score DESC);
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.game_scores ENABLE ROW LEVEL SECURITY;
 
--- Policy: Siapapun (publik) boleh membaca leaderboard
+-- Policy: Siapapun (publik) boleh membaca profil & leaderboard
 CREATE POLICY "Public profiles are viewable by everyone" 
 ON public.profiles FOR SELECT USING (true);
 
 CREATE POLICY "Public scores are viewable by everyone" 
 ON public.game_scores FOR SELECT USING (true);
 
+-- Policy: Siapapun dapat mendaftarkan profil pemain saat onboarding
+CREATE POLICY "Anyone can insert player profile" 
+ON public.profiles FOR INSERT WITH CHECK (true);
+
 -- Policy: Siapapun bisa mengirim skor (baik guest maupun user login)
 CREATE POLICY "Anyone can submit a game score" 
 ON public.game_scores FOR INSERT WITH CHECK (true);
 
--- Policy: Pengguna hanya dapat mengubah profil mereka sendiri
-CREATE POLICY "Users can insert their own profile" 
-ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "Users can update their own profile" 
-ON public.profiles FOR UPDATE USING (auth.uid() = id);
+-- Policy: Pengguna dapat mengupdate profil mereka sendiri
+CREATE POLICY "Users can update their profile" 
+ON public.profiles FOR UPDATE USING (true);

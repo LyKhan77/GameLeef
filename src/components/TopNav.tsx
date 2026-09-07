@@ -85,7 +85,7 @@ export default function TopNav({
         <div className="flex items-center gap-2.5">
           {/* Guest Player Auth Foundation Pill */}
           <div className="hidden lg:flex items-center gap-2 bg-[#181818] px-3 py-1.5 rounded-full border border-[#282828]">
-            <span className="text-sm">🎮</span>
+            <span className="text-sm">{playerProfile.avatar || '🌿'}</span>
             {!isEditingUser ? (
               <div className="flex items-center gap-1.5">
                 <span className="text-xs font-semibold text-white truncate max-w-[110px]">

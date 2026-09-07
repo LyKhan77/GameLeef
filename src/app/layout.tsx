@@ -4,6 +4,7 @@ import { GamePlayerProvider } from '@/context/GamePlayerContext';
 import NowPlayingBar from '@/components/NowPlayingBar';
 import GameTheaterModal from '@/components/GameTheaterModal';
 import LeeKhanModal from '@/components/LeeKhanModal';
+import OnboardingModal from '@/components/OnboardingModal';
 
 export const metadata: Metadata = {
   title: 'Game Leef — Gateway Game HTML & Indie Hub by Lee Khan',
@@ -32,6 +33,8 @@ export default function RootLayout({
           <GameTheaterModal />
           {/* Easter Egg & Creator Modal */}
           <LeeKhanModal />
+          {/* Welcome Player Onboarding Modal */}
+          <OnboardingModal />
         </GamePlayerProvider>
       </body>
     </html>

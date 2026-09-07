@@ -15,6 +15,43 @@ export const isSupabaseConfigured = (): boolean => {
 };
 
 /**
+ * Register player profile to Supabase database (with graceful fallback)
+ */
+export async function registerProfileToDatabase(
+  username: string,
+  avatar: string
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  if (!supabase) {
+    return { success: true };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert([
+        {
+          username,
+          avatar_url: avatar,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      console.warn('Supabase profile insert warning:', error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Unknown error';
+    return { success: false, error: msg };
+  }
+}
+
+/**
  * Submit score to Supabase database (with graceful local fallback)
  */
 export async function submitScoreToDatabase(
