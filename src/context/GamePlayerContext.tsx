@@ -199,7 +199,7 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
 
   const launchGame = (game: GameItem) => {
     // If previous game had active playtime, record it
-    if (activeGame && sessionTime >= 5 && playerProfile.username) {
+    if (activeGame && sessionTime >= 1 && playerProfile.username) {
       const currentScore = playerProfile.highScores[activeGame.id] || sessionTime;
       submitScoreToDatabase(activeGame.id, playerProfile.username, currentScore, {
         playtime: sessionTime,
@@ -228,11 +228,19 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
       } catch {}
       return updated;
     });
+
+    // Record game launch to database
+    if (playerProfile.username) {
+      const existingScore = playerProfile.highScores[game.id] || 1;
+      submitScoreToDatabase(game.id, playerProfile.username, existingScore, {
+        action: 'launch',
+      });
+    }
   };
 
   const closeTheater = () => {
     // Save session playtime/score to Supabase
-    if (activeGame && sessionTime >= 5 && playerProfile.username) {
+    if (activeGame && sessionTime >= 1 && playerProfile.username) {
       const currentScore = playerProfile.highScores[activeGame.id] || sessionTime;
       submitScoreToDatabase(activeGame.id, playerProfile.username, currentScore, {
         playtime: sessionTime,
