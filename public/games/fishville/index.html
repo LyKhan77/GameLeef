@@ -2692,5 +2692,26 @@ window.addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 </script>
+<script>
+// Game Leef Bridge SDK for FishVille
+(function() {
+  var lastSent = 0;
+  setInterval(function() {
+    if (window.__FV && window.__FV.state && typeof window.__FV.state.coins === 'number') {
+      var coins = Math.round(window.__FV.state.coins);
+      if (coins !== lastSent && coins > 0) {
+        lastSent = coins;
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: 'GAMELEEF_SUBMIT_SCORE',
+            gameId: 'fishville',
+            score: coins
+          }, '*');
+        }
+      }
+    }
+  }, 2500);
+})();
+</script>
 </body>
 </html>

@@ -19,7 +19,7 @@ import { GAMES_CATALOG, LeaderboardEntry } from '@/data/games';
 import { useGamePlayer } from '@/context/GamePlayerContext';
 import { sfx } from '@/lib/sfx';
 import { formatTime } from '@/lib/utils';
-import { fetchGameLeaderboard } from '@/lib/supabase';
+import { fetchGameLeaderboard, subscribeToGameScores } from '@/lib/supabase';
 
 export default function GameDetailPage() {
   const params = useParams();
@@ -42,9 +42,20 @@ export default function GameDetailPage() {
 
   useEffect(() => {
     if (game) {
-      fetchGameLeaderboard(game.id, game.leaderboard || []).then((res) => {
+      fetchGameLeaderboard(game.id).then((res) => {
         setLiveLeaderboard(res);
       });
+
+      // Subscribe to live score insertions via Supabase Realtime WebSocket
+      const unsubscribe = subscribeToGameScores(game.id, () => {
+        fetchGameLeaderboard(game.id).then((res) => {
+          setLiveLeaderboard(res);
+        });
+      });
+
+      return () => {
+        unsubscribe();
+      };
     }
   }, [game]);
 
@@ -325,41 +336,53 @@ export default function GameDetailPage() {
             </div>
 
             {/* Leaderboard Table */}
-            <div className="space-y-2">
-              {liveLeaderboard.map((entry) => (
-                <div
-                  key={entry.rank}
-                  className={`flex items-center justify-between p-3 rounded-xl border text-sm ${
-                    entry.rank === 1
-                      ? 'bg-[#ffa42b]/10 border-[#ffa42b]/40 text-white font-bold'
-                      : 'bg-[#1f1f1f] border-[#282828] text-[#b3b3b3]'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        entry.rank === 1
-                          ? 'bg-[#ffa42b] text-black'
-                          : entry.rank === 2
-                          ? 'bg-[#cbcbcb] text-black'
-                          : 'bg-[#282828] text-white'
-                      }`}
-                    >
-                      {entry.rank}
-                    </span>
-                    <span className="text-white font-medium">{entry.player}</span>
-                    {entry.badge && (
-                      <span className="text-[10px] bg-[#282828] px-2 py-0.5 rounded text-[#1ed760]">
-                        {entry.badge}
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-mono font-bold text-white">
-                    {entry.score.toLocaleString('id-ID')} {game.metricUnit || ''}
-                  </span>
+            {liveLeaderboard.length === 0 ? (
+              <div className="p-8 bg-[#1f1f1f] rounded-xl border border-[#282828] text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-[#282828] flex items-center justify-center text-2xl mx-auto text-[#ffa42b]">
+                  🏆
                 </div>
-              ))}
-            </div>
+                <h4 className="text-sm font-bold text-white">Belum Ada Skor di Database</h4>
+                <p className="text-xs text-[#7c7c7c] max-w-sm mx-auto leading-relaxed">
+                  Jadilah pemain pertama yang mencatatkan rekor skor di Supabase untuk game {game.title}!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {liveLeaderboard.map((entry) => (
+                  <div
+                    key={entry.rank}
+                    className={`flex items-center justify-between p-3 rounded-xl border text-sm ${
+                      entry.rank === 1
+                        ? 'bg-[#ffa42b]/10 border-[#ffa42b]/40 text-white font-bold'
+                        : 'bg-[#1f1f1f] border-[#282828] text-[#b3b3b3]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          entry.rank === 1
+                            ? 'bg-[#ffa42b] text-black'
+                            : entry.rank === 2
+                            ? 'bg-[#cbcbcb] text-black'
+                            : 'bg-[#282828] text-white'
+                        }`}
+                      >
+                        {entry.rank}
+                      </span>
+                      <span className="text-white font-medium">{entry.player}</span>
+                      {entry.badge && (
+                        <span className="text-[10px] bg-[#282828] px-2 py-0.5 rounded text-[#1ed760]">
+                          {entry.badge}
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-mono font-bold text-white">
+                      {entry.score.toLocaleString('id-ID')} {game.metricUnit || ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>

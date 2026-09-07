@@ -17,10 +17,10 @@ export interface GameItem {
   tagline: string;
   description: string;
   category: 'Simulation' | 'Arcade' | 'Action' | 'Music' | 'Chill' | 'Casual';
-  genre: string; // Detail genre e.g. "Simulation, Chill", "Arcade-Gambling", etc.
+  genre: string;
   developer: string;
   developerRole?: string;
-  aiEngine: string; // e.g. 'Qwen3.8 27B', 'GLM 5.3 Flash', 'Opus 5', 'Claude 3.7 Sonnet'
+  aiEngine: string;
   thumbnail: string;
   accentColor: string;
   icon: string;
@@ -34,8 +34,8 @@ export interface GameItem {
   controls: GameControl[];
   featured?: boolean;
   isCustomReady?: boolean;
-  metricName?: string; // e.g. "Koin Akuarium", "Total Profit", "Skor Panggung"
-  metricUnit?: string; // e.g. "🪙", "💵 CREDITS", "PTS"
+  metricName?: string;
+  metricUnit?: string;
   leaderboard?: LeaderboardEntry[];
 }
 
@@ -49,7 +49,7 @@ export interface Playlist {
 
 /**
  * =========================================================================
- * GAME LEEF CATALOG - THE INDIE & HUMOROUS HTML GAME REPOSITORY
+ * GAME LEEF CATALOG - 100% REALTIME SUPABASE LEADERBOARDS
  * Curated & Created by Lee Khan • Powered by AI Models
  * =========================================================================
  */
@@ -83,13 +83,7 @@ export const GAMES_CATALOG: GameItem[] = [
     featured: true,
     metricName: 'Koin Akuarium',
     metricUnit: '🪙',
-    leaderboard: [
-      { rank: 1, player: 'Lee Khan 👑', score: 14500, badge: 'Aquarium Master' },
-      { rank: 2, player: 'JuraganCupang', score: 11200, badge: 'Pro Breeder' },
-      { rank: 3, player: 'OyenPenyayangIkan', score: 8430, badge: 'Fish Whisperer' },
-      { rank: 4, player: 'NemoLover', score: 5820, badge: 'Casual' },
-      { rank: 5, player: 'Player_Santuy', score: 3200, badge: 'Rookie' }
-    ]
+    leaderboard: []
   },
   {
     id: 'hit-and-cash',
@@ -120,13 +114,7 @@ export const GAMES_CATALOG: GameItem[] = [
     featured: true,
     metricName: 'Total Profit Pialang',
     metricUnit: '💵 CREDITS',
-    leaderboard: [
-      { rank: 1, player: 'Lee Khan 👑', score: 58000, badge: 'Market Whale' },
-      { rank: 2, player: 'CuanMaksimal', score: 42300, badge: 'High Roller' },
-      { rank: 3, player: 'SupirTrukKilat', score: 29800, badge: 'Traffic King' },
-      { rank: 4, player: 'BikersNekat', score: 18400, badge: 'Gambler' },
-      { rank: 5, player: 'TraderKopi', score: 9500, badge: 'Rookie' }
-    ]
+    leaderboard: []
   },
   {
     id: 'mount-explosive',
@@ -157,13 +145,7 @@ export const GAMES_CATALOG: GameItem[] = [
     featured: false,
     metricName: 'Jam Terbang Vulkanik',
     metricUnit: 'Erupsi & Waktu',
-    leaderboard: [
-      { rank: 1, player: 'Lee Khan 👑', score: 9999, badge: 'Lava Lord' },
-      { rank: 2, player: 'KrakatauVibes', score: 8750, badge: 'Pyromancer' },
-      { rank: 3, player: 'PetugasPosPantau', score: 7100, badge: 'Geologist' },
-      { rank: 4, player: 'PencariBatuAkik', score: 5200, badge: 'Observer' },
-      { rank: 5, player: 'GunungMerapiFans', score: 3400, badge: 'Tourist' }
-    ]
+    leaderboard: []
   },
   {
     id: 'rock-n-goofy',
@@ -194,13 +176,7 @@ export const GAMES_CATALOG: GameItem[] = [
     featured: true,
     metricName: 'Skor Panggung Musik',
     metricUnit: 'PTS',
-    leaderboard: [
-      { rank: 1, player: 'Lee Khan 👑', score: 98500, badge: 'Guitar God' },
-      { rank: 2, player: 'SlashWannabe', score: 89200, badge: 'Shredder' },
-      { rank: 3, player: 'JimiHendrixKW', score: 76400, badge: 'Rock Star' },
-      { rank: 4, player: 'AnakBandDepok', score: 54300, badge: 'Rocker' },
-      { rank: 5, player: 'BassBetot', score: 32100, badge: 'Roadie' }
-    ]
+    leaderboard: []
   },
   {
     id: 'tornado-holic',
@@ -230,13 +206,7 @@ export const GAMES_CATALOG: GameItem[] = [
     featured: false,
     metricName: 'Massa Pusaran Badai',
     metricUnit: 'Ton Vortex',
-    leaderboard: [
-      { rank: 1, player: 'Lee Khan 👑', score: 84200, badge: 'Storm God' },
-      { rank: 2, player: 'AnginPutingBeliung', score: 67300, badge: 'F5 Catastrophe' },
-      { rank: 3, player: 'PenyapuGenteng', score: 49800, badge: 'Vortex Pro' },
-      { rank: 4, player: 'KipasAnginRusak', score: 32400, badge: 'Breeze' },
-      { rank: 5, player: 'DaunMelayang', score: 18900, badge: 'Rookie' }
-    ]
+    leaderboard: []
   },
   {
     id: 'leef-jumper',
@@ -266,13 +236,7 @@ export const GAMES_CATALOG: GameItem[] = [
     featured: false,
     metricName: 'Skor Lompat Daun',
     metricUnit: 'PTS',
-    leaderboard: [
-      { rank: 1, player: 'Lee Khan 👑', score: 9840, badge: 'Grandmaster' },
-      { rank: 2, player: 'KopiAddict99', score: 7210, badge: 'Pro' },
-      { rank: 3, player: 'OyenBegadang', score: 5430, badge: 'Master' },
-      { rank: 4, player: 'KentangPower', score: 3820, badge: 'Indie' },
-      { rank: 5, player: 'Player_Santuy', score: 2190, badge: 'Rookie' }
-    ]
+    leaderboard: []
   }
 ];
 

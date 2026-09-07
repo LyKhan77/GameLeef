@@ -2121,5 +2121,26 @@ window.__HAC = { state: state, RT_APS: RT_APS, LANES: LANES, MAPS: MAPS, vehicle
 
 })();
 </script>
+<script>
+// Game Leef Bridge SDK for Hit & Cash
+(function() {
+  var lastSent = 0;
+  setInterval(function() {
+    if (window.__HAC && window.__HAC.state && typeof window.__HAC.state.balance === 'number') {
+      var bal = Math.round(window.__HAC.state.balance);
+      if (bal !== lastSent && bal > 0) {
+        lastSent = bal;
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({
+            type: 'GAMELEEF_SUBMIT_SCORE',
+            gameId: 'hit-and-cash',
+            score: bal
+          }, '*');
+        }
+      }
+    }
+  }, 2500);
+})();
+</script>
 </body>
 </html>

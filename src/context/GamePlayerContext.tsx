@@ -93,6 +93,9 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
         });
         if (!onboarded) {
           setIsOnboardingOpen(true);
+        } else if (parsed.username) {
+          // Sync profile to Supabase database
+          registerProfileToDatabase(parsed.username, parsed.avatar || '🌿');
         }
         if (parsed.lastPlayedGameId) {
           const found = GAMES_CATALOG.find((g) => g.id === parsed.lastPlayedGameId);
@@ -179,14 +182,30 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
           }
           return updated;
         });
+
+        // Periodic sync to Supabase every 30 seconds
+        if (sessionTime > 0 && sessionTime % 30 === 0 && activeGame && playerProfile.username) {
+          const currentScore = playerProfile.highScores[activeGame.id] || sessionTime;
+          submitScoreToDatabase(activeGame.id, playerProfile.username, currentScore, {
+            playtime: sessionTime,
+          });
+        }
       }, 1000);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isPlaying, isTheaterOpen, activeGame, sessionTime]);
+  }, [isPlaying, isTheaterOpen, activeGame, sessionTime, playerProfile.username, playerProfile.highScores]);
 
   const launchGame = (game: GameItem) => {
+    // If previous game had active playtime, record it
+    if (activeGame && sessionTime >= 5 && playerProfile.username) {
+      const currentScore = playerProfile.highScores[activeGame.id] || sessionTime;
+      submitScoreToDatabase(activeGame.id, playerProfile.username, currentScore, {
+        playtime: sessionTime,
+      });
+    }
+
     setActiveGame(game);
     setIsPlaying(true);
     setIsTheaterOpen(true);
@@ -212,6 +231,14 @@ export function GamePlayerProvider({ children }: { children: ReactNode }) {
   };
 
   const closeTheater = () => {
+    // Save session playtime/score to Supabase
+    if (activeGame && sessionTime >= 5 && playerProfile.username) {
+      const currentScore = playerProfile.highScores[activeGame.id] || sessionTime;
+      submitScoreToDatabase(activeGame.id, playerProfile.username, currentScore, {
+        playtime: sessionTime,
+      });
+    }
+
     setIsTheaterOpen(false);
     sfx.playClick();
   };

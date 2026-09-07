@@ -18,7 +18,7 @@ import {
 import { useGamePlayer } from '@/context/GamePlayerContext';
 import { formatTime } from '@/lib/utils';
 import { sfx } from '@/lib/sfx';
-import { fetchGameLeaderboard } from '@/lib/supabase';
+import { fetchGameLeaderboard, subscribeToGameScores } from '@/lib/supabase';
 import { LeaderboardEntry } from '@/data/games';
 
 export default function GameTheaterModal() {
@@ -40,9 +40,20 @@ export default function GameTheaterModal() {
 
   useEffect(() => {
     if (activeGame) {
-      fetchGameLeaderboard(activeGame.id, activeGame.leaderboard || []).then((res) => {
+      fetchGameLeaderboard(activeGame.id).then((res) => {
         setLiveLeaderboard(res);
       });
+
+      // Subscribe to live score insertions via Supabase Realtime WebSocket
+      const unsubscribe = subscribeToGameScores(activeGame.id, () => {
+        fetchGameLeaderboard(activeGame.id).then((res) => {
+          setLiveLeaderboard(res);
+        });
+      });
+
+      return () => {
+        unsubscribe();
+      };
     }
   }, [activeGame]);
 
@@ -231,38 +242,50 @@ export default function GameTheaterModal() {
                   </div>
 
                   {/* Leaderboard Entries List */}
-                  <div className="space-y-1.5">
-                    {liveLeaderboard.map((entry) => (
-                      <div
-                        key={entry.rank}
-                        className={`flex items-center justify-between p-2.5 rounded-lg text-xs border ${
-                          entry.rank === 1
-                            ? 'bg-[#ffa42b]/10 border-[#ffa42b]/40 text-white'
-                            : 'bg-[#1f1f1f] border-[#282828] text-[#b3b3b3]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                              entry.rank === 1
-                                ? 'bg-[#ffa42b] text-black'
-                                : entry.rank === 2
-                                ? 'bg-[#cbcbcb] text-black'
-                                : 'bg-[#282828] text-white'
-                            }`}
-                          >
-                            {entry.rank}
-                          </span>
-                          <span className="font-semibold text-white truncate max-w-[110px]">
-                            {entry.player}
+                  {liveLeaderboard.length === 0 ? (
+                    <div className="p-5 bg-[#1f1f1f] rounded-xl border border-[#282828] text-center space-y-2">
+                      <div className="w-9 h-9 rounded-full bg-[#282828] flex items-center justify-center text-lg mx-auto text-[#ffa42b]">
+                        🏆
+                      </div>
+                      <h5 className="text-xs font-bold text-white">Belum Ada Skor di Database</h5>
+                      <p className="text-[11px] text-[#7c7c7c] leading-relaxed">
+                        Jadilah yang pertama mencetak rekor skor di Supabase untuk game ini!
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {liveLeaderboard.map((entry) => (
+                        <div
+                          key={entry.rank}
+                          className={`flex items-center justify-between p-2.5 rounded-lg text-xs border ${
+                            entry.rank === 1
+                              ? 'bg-[#ffa42b]/10 border-[#ffa42b]/40 text-white font-bold'
+                              : 'bg-[#1f1f1f] border-[#282828] text-[#b3b3b3]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                entry.rank === 1
+                                  ? 'bg-[#ffa42b] text-black'
+                                  : entry.rank === 2
+                                  ? 'bg-[#cbcbcb] text-black'
+                                  : 'bg-[#282828] text-white'
+                              }`}
+                            >
+                              {entry.rank}
+                            </span>
+                            <span className="font-semibold text-white truncate max-w-[110px]">
+                              {entry.player}
+                            </span>
+                          </div>
+                          <span className="font-mono font-bold text-white text-[11px]">
+                            {entry.score.toLocaleString('id-ID')} {activeGame.metricUnit || ''}
                           </span>
                         </div>
-                        <span className="font-mono font-bold text-white text-[11px]">
-                          {entry.score.toLocaleString('id-ID')} {activeGame.metricUnit || ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">

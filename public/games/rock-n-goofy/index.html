@@ -4212,5 +4212,35 @@ if(!window.THREE){
   Engine.boot();
 }
 </script>
+<script>
+// Game Leef Bridge SDK for Rock & Goofy
+(function() {
+  function sendScore(score) {
+    if (window.parent && window.parent !== window && score > 0) {
+      window.parent.postMessage({
+        type: 'GAMELEEF_SUBMIT_SCORE',
+        gameId: 'rock-n-goofy',
+        score: Math.round(score)
+      }, '*');
+    }
+  }
+
+  window.addEventListener('load', function() {
+    var res = document.getElementById('result');
+    if (res) {
+      var observer = new MutationObserver(function() {
+        if (!res.classList.contains('hidden')) {
+          var el = document.getElementById('rScore');
+          if (el) {
+            var num = parseInt(el.textContent.replace(/[^0-9]/g, ''), 10);
+            if (num > 0) sendScore(num);
+          }
+        }
+      });
+      observer.observe(res, { attributes: true, attributeFilter: ['class'] });
+    }
+  });
+})();
+</script>
 </body>
 </html>
